@@ -30968,11 +30968,34 @@ var import_node_path3 = __toESM(require("node:path"), 1);
 // src/core/prompt-loader.ts
 var import_promises2 = require("node:fs/promises");
 var import_node_path2 = __toESM(require("node:path"), 1);
-function resolvePromptRoot(promptRoot = "prompts") {
+var ACTION_ENTRY_FILE_PATTERN = /^index\.(cjs|js|mjs)$/;
+function resolveActionBundleRootFromEntry(entryPath) {
+  if (!entryPath) {
+    return void 0;
+  }
+  const normalizedEntryPath = import_node_path2.default.resolve(entryPath);
+  const entryDir = import_node_path2.default.dirname(normalizedEntryPath);
+  const entryName = import_node_path2.default.basename(normalizedEntryPath);
+  if (import_node_path2.default.basename(entryDir) !== "dist") {
+    return void 0;
+  }
+  if (!ACTION_ENTRY_FILE_PATTERN.test(entryName)) {
+    return void 0;
+  }
+  return import_node_path2.default.resolve(entryDir, "..");
+}
+function resolvePromptRoot(promptRoot = "prompts", options) {
   if (import_node_path2.default.isAbsolute(promptRoot)) {
     return promptRoot;
   }
-  const baseDir = process.env.GITHUB_ACTION_PATH || process.cwd();
+  const githubActionPath = options?.githubActionPath ?? process.env.GITHUB_ACTION_PATH;
+  if (githubActionPath && githubActionPath.trim().length > 0) {
+    return import_node_path2.default.resolve(githubActionPath, promptRoot);
+  }
+  const actionBundleRoot = resolveActionBundleRootFromEntry(
+    options?.entryPath ?? process.argv[1]
+  );
+  const baseDir = actionBundleRoot ?? options?.cwd ?? process.cwd();
   return import_node_path2.default.resolve(baseDir, promptRoot);
 }
 async function readPromptText(promptRoot, promptPath) {
