@@ -1,4 +1,5 @@
 import { useEffect, useReducer, useState } from "react";
+import type { LoadedPromptArchitecture } from "../../src/core/types";
 import { fetchArchitectures, startSandboxRun } from "./api";
 import { ArchitectureSwitcher } from "./components/ArchitectureSwitcher";
 import { FileSetEditor } from "./components/FileSetEditor";
@@ -10,11 +11,43 @@ import {
   createInitialSandboxState,
   getPromptCoverageLabels,
   getPromptDraftsForArchitecture,
+  getPromptSourceForArchitecture,
   getSelectedArchitecture,
   sandboxReducer,
 } from "./state";
 
 type ClientLogLevel = "debug" | "info" | "warn" | "error";
+
+function buildBuiltInPromptJson(
+  architecture: LoadedPromptArchitecture | undefined,
+): string {
+  if (!architecture) {
+    return "";
+  }
+
+  if (architecture.mode === "single") {
+    return JSON.stringify(
+      {
+        review: architecture.stages[0]?.promptText ?? "",
+      },
+      null,
+      2,
+    );
+  }
+
+  const prompts: Record<string, string> = Object.fromEntries(
+    architecture.stages.map((stage, index) => [
+      `stage${index + 1}`,
+      stage.promptText,
+    ]),
+  );
+
+  if (architecture.combineStage) {
+    prompts.combine = architecture.combineStage.promptText;
+  }
+
+  return JSON.stringify(prompts, null, 2);
+}
 
 export function App() {
   const [state, dispatch] = useReducer(
@@ -84,6 +117,8 @@ export function App() {
       return;
     }
 
+    const promptSource = getPromptSourceForArchitecture(state, architecture.id);
+
     if (state.fileDrafts.length === 0) {
       appendClientLog("warn", "Run blocked because no files are uploaded.", {
         architectureId: architecture.id,
@@ -97,42 +132,45 @@ export function App() {
     }
 
     const promptDrafts = getPromptDraftsForArchitecture(state, architecture.id);
-    if (promptImportValidationError) {
-      appendClientLog(
-        "warn",
-        "Run blocked because Import instructions JSON is invalid.",
-        {
-          architectureId: architecture.id,
-          error: promptImportValidationError,
-        },
-      );
-      dispatch({
-        type: "set-run-status",
-        status: "failed",
-        errorMessage: "Fix Import instructions JSON before running the review.",
-      });
-      return;
-    }
+    if (promptSource === "custom") {
+      if (promptImportValidationError) {
+        appendClientLog(
+          "warn",
+          "Run blocked because Import instructions JSON is invalid.",
+          {
+            architectureId: architecture.id,
+            error: promptImportValidationError,
+          },
+        );
+        dispatch({
+          type: "set-run-status",
+          status: "failed",
+          errorMessage:
+            "Fix Import instructions JSON before running the review.",
+        });
+        return;
+      }
 
-    const missingPromptLabels = getPromptCoverageLabels(
-      architecture,
-      promptDrafts,
-    );
-    if (missingPromptLabels.length > 0) {
-      appendClientLog(
-        "warn",
-        "Run blocked because some required prompts are missing.",
-        {
-          architectureId: architecture.id,
-          missingPrompts: missingPromptLabels,
-        },
+      const missingPromptLabels = getPromptCoverageLabels(
+        architecture,
+        promptDrafts,
       );
-      dispatch({
-        type: "set-run-status",
-        status: "failed",
-        errorMessage: `Fill all prompts before running: ${missingPromptLabels.join(", ")}.`,
-      });
-      return;
+      if (missingPromptLabels.length > 0) {
+        appendClientLog(
+          "warn",
+          "Run blocked because some required prompts are missing.",
+          {
+            architectureId: architecture.id,
+            missingPrompts: missingPromptLabels,
+          },
+        );
+        dispatch({
+          type: "set-run-status",
+          status: "failed",
+          errorMessage: `Fill all prompts before running: ${missingPromptLabels.join(", ")}.`,
+        });
+        return;
+      }
     }
 
     dispatch({ type: "clear-run" });
@@ -189,19 +227,35 @@ export function App() {
     await navigator.clipboard.writeText(state.outputMarkdown);
   }
 
+  async function copyBuiltInPromptJson(promptJson: string): Promise<void> {
+    if (promptJson.trim().length === 0) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(promptJson);
+  }
+
   const selectedArchitecture = getSelectedArchitecture(state);
   const selectedPromptDrafts = selectedArchitecture
     ? getPromptDraftsForArchitecture(state, selectedArchitecture.id)
     : {};
-  const missingPromptLabels = selectedArchitecture
+  const selectedPromptSource = selectedArchitecture
+    ? getPromptSourceForArchitecture(state, selectedArchitecture.id)
+    : "default";
+  const usingCustomPrompts = selectedPromptSource === "custom";
+  const missingPromptLabels = selectedArchitecture && usingCustomPrompts
     ? getPromptCoverageLabels(selectedArchitecture, selectedPromptDrafts)
     : [];
+  const hasPromptImportValidationError = Boolean(promptImportValidationError);
+  const hasBlockingPromptError =
+    usingCustomPrompts && hasPromptImportValidationError;
+  const builtInPromptJson = buildBuiltInPromptJson(selectedArchitecture);
   const canRunReview = Boolean(
     selectedArchitecture &&
       !loadingArchitectures &&
       state.fileDrafts.length > 0 &&
       missingPromptLabels.length === 0 &&
-      !promptImportValidationError,
+      !hasBlockingPromptError,
   );
   const readyFileCount = state.fileDrafts.filter(
     (draft) => draft.sampleCode.trim().length > 0,
@@ -222,6 +276,20 @@ export function App() {
             onSelect={(architectureId) =>
               dispatch({ type: "select-architecture", architectureId })
             }
+            selectedPromptSource={selectedPromptSource}
+            onSelectPromptSource={(source) => {
+              const architectureId =
+                selectedArchitecture?.id ?? state.selectedArchitectureId;
+              if (!architectureId) {
+                return;
+              }
+
+              dispatch({
+                type: "set-prompt-source",
+                architectureId,
+                source,
+              });
+            }}
             disabled={loadingArchitectures}
           />
 
@@ -229,15 +297,17 @@ export function App() {
             className={`badge ${missingPromptLabels.length === 0 ? "badge-completed" : "badge-failed"}`}
           >
             {selectedArchitecture
-              ? missingPromptLabels.length === 0
-                ? "Instructions ready"
-                : `${missingPromptLabels.length} instructions missing`
+              ? usingCustomPrompts
+                ? missingPromptLabels.length === 0
+                  ? "Custom instructions ready"
+                  : `${missingPromptLabels.length} instructions missing`
+                : "Using default instructions"
               : loadingArchitectures
                 ? "Loading templates"
                 : "No template selected"}
           </span>
 
-          {promptImportValidationError ? (
+          {usingCustomPrompts && hasPromptImportValidationError ? (
             <span className="badge badge-failed">Fix Import JSON</span>
           ) : null}
 
@@ -275,14 +345,18 @@ export function App() {
           <div className="quick-step">
             <h3>Add instructions</h3>
             <p className="muted">
-              Fill each required instruction box for your template.
+              {usingCustomPrompts
+                ? "Fill each required instruction box for your template."
+                : "Using the built-in template instructions from code."}
             </p>
             <span
               className={`badge ${missingPromptLabels.length === 0 ? "badge-completed" : "badge-failed"}`}
             >
-              {missingPromptLabels.length === 0
-                ? "All required instructions filled"
-                : `${missingPromptLabels.length} still needed`}
+              {usingCustomPrompts
+                ? missingPromptLabels.length === 0
+                  ? "All required instructions filled"
+                  : `${missingPromptLabels.length} still needed`
+                : "Built-in defaults enabled"}
             </span>
           </div>
           <div className="quick-step">
@@ -303,35 +377,73 @@ export function App() {
 
       <main className="workspace">
         <section className="input-column">
-          <PromptEditor
-            key={selectedArchitecture?.id ?? "loading"}
-            architecture={selectedArchitecture}
-            promptDrafts={selectedPromptDrafts}
-            onChangePrompt={(promptId, value) => {
-              if (!selectedArchitecture) {
-                return;
-              }
+          {!selectedArchitecture || usingCustomPrompts ? (
+            <PromptEditor
+              key={selectedArchitecture?.id ?? "loading"}
+              architecture={selectedArchitecture}
+              promptDrafts={selectedPromptDrafts}
+              onChangePrompt={(promptId, value) => {
+                if (!selectedArchitecture) {
+                  return;
+                }
 
-              dispatch({
-                type: "update-prompt",
-                architectureId: selectedArchitecture.id,
-                promptId,
-                value,
-              });
-            }}
-            onMergePromptDrafts={(promptDrafts) => {
-              if (!selectedArchitecture) {
-                return;
-              }
+                dispatch({
+                  type: "update-prompt",
+                  architectureId: selectedArchitecture.id,
+                  promptId,
+                  value,
+                });
+              }}
+              onMergePromptDrafts={(promptDrafts) => {
+                if (!selectedArchitecture) {
+                  return;
+                }
 
-              dispatch({
-                type: "merge-prompt-drafts",
-                architectureId: selectedArchitecture.id,
-                promptDrafts,
-              });
-            }}
-            onImportValidationChange={setPromptImportValidationError}
-          />
+                dispatch({
+                  type: "merge-prompt-drafts",
+                  architectureId: selectedArchitecture.id,
+                  promptDrafts,
+                });
+              }}
+              onImportValidationChange={setPromptImportValidationError}
+            />
+          ) : (
+            <div className="panel prompts-panel stack prompt-source-default-panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Instructions</p>
+                  <h2>Using built-in template instructions</h2>
+                </div>
+                <span className="badge badge-completed">Ready</span>
+              </div>
+
+              <p className="muted">
+                The selected architecture will run with the default prompts that
+                ship with this project.
+              </p>
+
+              <label className="field compact-field">
+                <span>Import instructions JSON</span>
+                <textarea rows={10} readOnly value={builtInPromptJson} />
+              </label>
+
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void copyBuiltInPromptJson(builtInPromptJson)}
+                  disabled={builtInPromptJson.trim().length === 0}
+                >
+                  Copy built-in JSON
+                </button>
+              </div>
+
+              <p className="muted">
+                Switch Prompt source to Add my own prompts if you want to edit
+                these instructions or import your own JSON.
+              </p>
+            </div>
+          )}
         </section>
 
         <section className="log-column">

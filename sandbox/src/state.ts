@@ -27,12 +27,57 @@ export interface PromptDraftsByArchitecture {
   [architectureId: string]: PromptDraftMap;
 }
 
+export type PromptSourceMode = "default" | "custom";
+
+export interface PromptSourcesByArchitecture {
+  [architectureId: string]: PromptSourceMode;
+}
+
+const PROMPT_SOURCE_STORAGE_KEY = "ccr-sandbox-prompt-source-by-architecture";
+
+function normalizePromptSourceMode(value: unknown): PromptSourceMode {
+  return value === "custom" ? "custom" : "default";
+}
+
+function readPromptSourcesByArchitecture(): PromptSourcesByArchitecture {
+  const rawValue = globalThis.localStorage?.getItem(PROMPT_SOURCE_STORAGE_KEY);
+  if (!rawValue) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).map(([architectureId, source]) => [
+        architectureId,
+        normalizePromptSourceMode(source),
+      ]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function persistPromptSourcesByArchitecture(
+  sources: PromptSourcesByArchitecture,
+): void {
+  globalThis.localStorage?.setItem(
+    PROMPT_SOURCE_STORAGE_KEY,
+    JSON.stringify(sources),
+  );
+}
+
 export interface SandboxState {
   architectures: LoadedPromptArchitecture[];
   selectedArchitectureId: string;
   fileDrafts: SandboxFileDraft[];
   metadata: string;
   promptDraftsByArchitecture: PromptDraftsByArchitecture;
+  promptSourceByArchitecture: PromptSourcesByArchitecture;
   outputMarkdown: string;
   rawModelOutput: string;
   sentPrompt: string;
@@ -66,6 +111,11 @@ type SandboxAction =
       type: "merge-prompt-drafts";
       architectureId: string;
       promptDrafts: PromptDraftMap;
+    }
+  | {
+      type: "set-prompt-source";
+      architectureId: string;
+      source: PromptSourceMode;
     }
   | { type: "append-log"; entry: LogEntry }
   | { type: "set-prompt-sent"; prompt: string }
@@ -139,6 +189,18 @@ function createPromptDraftsForArchitectures(
   return nextDrafts;
 }
 
+function createPromptSourcesForArchitectures(
+  architectures: LoadedPromptArchitecture[],
+  existingSources: PromptSourcesByArchitecture,
+): PromptSourcesByArchitecture {
+  return Object.fromEntries(
+    architectures.map((architecture) => [
+      architecture.id,
+      normalizePromptSourceMode(existingSources[architecture.id]),
+    ]),
+  );
+}
+
 export function createInitialSandboxState(): SandboxState {
   return {
     architectures: [],
@@ -147,6 +209,7 @@ export function createInitialSandboxState(): SandboxState {
     fileDrafts: [],
     metadata: globalThis.localStorage?.getItem("ccr-sandbox-metadata") ?? "",
     promptDraftsByArchitecture: {},
+    promptSourceByArchitecture: readPromptSourcesByArchitecture(),
     outputMarkdown: "",
     rawModelOutput: "",
     sentPrompt: "",
@@ -200,6 +263,13 @@ export function getPromptDraftsForArchitecture(
   );
 }
 
+export function getPromptSourceForArchitecture(
+  state: SandboxState,
+  architectureId: string,
+): PromptSourceMode {
+  return normalizePromptSourceMode(state.promptSourceByArchitecture[architectureId]);
+}
+
 export function getPromptCoverageLabels(
   architecture: LoadedPromptArchitecture,
   promptDrafts: PromptDraftMap,
@@ -225,6 +295,10 @@ export function sandboxReducer(
       )
         ? state.selectedArchitectureId
         : (action.architectures[0]?.id ?? state.selectedArchitectureId);
+      const promptSourceByArchitecture = createPromptSourcesForArchitectures(
+        action.architectures,
+        state.promptSourceByArchitecture,
+      );
 
       if (
         selectedArchitectureId &&
@@ -236,6 +310,8 @@ export function sandboxReducer(
         );
       }
 
+      persistPromptSourcesByArchitecture(promptSourceByArchitecture);
+
       return {
         ...state,
         architectures: action.architectures,
@@ -244,6 +320,7 @@ export function sandboxReducer(
           action.architectures,
           state.promptDraftsByArchitecture,
         ),
+        promptSourceByArchitecture,
       };
     }
     case "select-architecture":
@@ -325,6 +402,28 @@ export function sandboxReducer(
         },
       };
     }
+    case "set-prompt-source": {
+      const nextPromptSource = normalizePromptSourceMode(action.source);
+      const currentPromptSource = normalizePromptSourceMode(
+        state.promptSourceByArchitecture[action.architectureId],
+      );
+
+      if (currentPromptSource === nextPromptSource) {
+        return state;
+      }
+
+      const promptSourceByArchitecture = {
+        ...state.promptSourceByArchitecture,
+        [action.architectureId]: nextPromptSource,
+      };
+
+      persistPromptSourcesByArchitecture(promptSourceByArchitecture);
+
+      return {
+        ...state,
+        promptSourceByArchitecture,
+      };
+    }
     case "append-log":
       if (action.entry.details?.promptMessages) {
         return {
@@ -386,6 +485,7 @@ export function buildReviewRequest(state: SandboxState): ReviewRequest {
   const architecture = state.architectures.find(
     (entry) => entry.id === architectureId,
   );
+  const promptSource = getPromptSourceForArchitecture(state, architectureId);
 
   return {
     architectureId,
@@ -399,7 +499,7 @@ export function buildReviewRequest(state: SandboxState): ReviewRequest {
     context: {
       metadata: state.metadata.trim().length > 0 ? state.metadata : undefined,
     },
-    promptOverrides: architecture
+    promptOverrides: architecture && promptSource === "custom"
       ? getPromptDraftsForArchitecture(state, architectureId)
       : undefined,
   };

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   buildReviewRequest,
   createEmptyFileDraft,
@@ -8,6 +8,10 @@ import {
 } from "../sandbox/src/state";
 
 describe("app state", () => {
+  beforeEach(() => {
+    globalThis.localStorage?.clear();
+  });
+
   it("adds and removes file sets without forcing a fallback row", () => {
     let state = createInitialSandboxState();
     expect(state.fileDrafts).toHaveLength(0);
@@ -43,7 +47,7 @@ describe("app state", () => {
     expect(request.context?.metadata).toBe("demo metadata");
   });
 
-  it("stores prompt edits per architecture and includes them in the request", async () => {
+  it("uses built-in prompts by default when no custom source is selected", async () => {
     const { loadAvailableArchitectures } = await import("../src/core/manifest");
     const architectures = await loadAvailableArchitectures("prompts");
 
@@ -55,6 +59,36 @@ describe("app state", () => {
     state = sandboxReducer(state, {
       type: "select-architecture",
       architectureId: "parallel",
+    });
+    state = sandboxReducer(state, {
+      type: "update-prompt",
+      architectureId: "parallel",
+      promptId: "stage-1",
+      value: "edited-stage-one",
+    });
+
+    const request = buildReviewRequest(state);
+
+    expect(request.promptOverrides).toBeUndefined();
+  });
+
+  it("stores prompt edits per architecture and includes them when custom source is selected", async () => {
+    const { loadAvailableArchitectures } = await import("../src/core/manifest");
+    const architectures = await loadAvailableArchitectures("prompts");
+
+    let state = sandboxReducer(createInitialSandboxState(), {
+      type: "set-architectures",
+      architectures,
+    });
+
+    state = sandboxReducer(state, {
+      type: "select-architecture",
+      architectureId: "parallel",
+    });
+    state = sandboxReducer(state, {
+      type: "set-prompt-source",
+      architectureId: "parallel",
+      source: "custom",
     });
     state = sandboxReducer(state, {
       type: "update-prompt",

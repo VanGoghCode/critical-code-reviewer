@@ -89,7 +89,7 @@ permissions:
   pull-requests: write
 ```
 
-When the action runs on pull request events, use `actions/checkout@v4` with `fetch-depth: 0` so the diff range can be resolved reliably.
+When the action runs on pull request events, use `actions/checkout@v5` with `fetch-depth: 0` so the diff range can be resolved reliably.
 
 ## Example Workflow
 
@@ -110,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 

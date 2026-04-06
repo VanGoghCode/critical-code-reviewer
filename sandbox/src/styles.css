@@ -546,8 +546,15 @@ body {
 
 .architecture-switcher {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.architecture-switcher-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .architecture-switcher-highlight {
@@ -564,12 +571,18 @@ body {
 
 .architecture-switcher-label {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   white-space: nowrap;
   color: var(--muted);
   font-size: 0.84rem;
   font-weight: 700;
+}
+
+.architecture-switcher-label .eyebrow {
+  margin: 0;
+  line-height: 1;
 }
 
 .architecture-switcher-highlight .architecture-switcher-label {
@@ -578,6 +591,10 @@ body {
 
 .architecture-switcher-highlight .select-control {
   border-color: rgba(15, 118, 110, 0.45);
+}
+
+.prompt-source-default-panel {
+  min-height: 200px;
 }
 
 .select-control {
