@@ -8,10 +8,15 @@ async function run() {
     const config = readAsuAimlProviderConfig();
     console.log("Using model:", config.model);
     console.log("Using provider:", config.modelProvider);
-    
-    const messages = [{ role: "user" as const, content: "Explain quantum computing in 1 sentence." }];
+
+    const messages = [
+      {
+        role: "user" as const,
+        content: "Explain quantum computing in 1 sentence.",
+      },
+    ];
     const response = await requestAsuAimlChatCompletion(config, messages);
-    
+
     console.log("\n✅ Response Received:");
     console.log(response);
   } catch (error) {

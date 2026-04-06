@@ -93,8 +93,14 @@ export function renderReviewMarkdown(params: {
   rawOutput: string;
   prompt: string;
 }): ReviewReport {
-  const { architecture, request, modelOutput, stageOutputs, rawOutput, prompt } =
-    params;
+  const {
+    architecture,
+    request,
+    modelOutput,
+    stageOutputs,
+    rawOutput,
+    prompt,
+  } = params;
   const title = `CCR Review for ${architecture.label}`;
   const contextLines = [
     `- Architecture: ${architecture.label} (${architecture.id})`,

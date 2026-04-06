@@ -83,17 +83,10 @@ export function readAsuAimlProviderConfig(
   return {
     apiKey,
     baseUrl: env.ASU_BASE_URL?.trim() || DEFAULT_ASU_BASE_URL,
-    modelProvider:
-      env.ASU_MODEL_PROVIDER?.trim() || DEFAULT_ASU_MODEL_PROVIDER,
+    modelProvider: env.ASU_MODEL_PROVIDER?.trim() || DEFAULT_ASU_MODEL_PROVIDER,
     model,
-    temperature: readNumberEnv(
-      env.ASU_TEMPERATURE,
-      DEFAULT_OPENAI_TEMPERATURE,
-    ),
-    timeoutMs: readIntegerEnv(
-      env.ASU_TIMEOUT_MS,
-      DEFAULT_OPENAI_TIMEOUT_MS,
-    ),
+    temperature: readNumberEnv(env.ASU_TEMPERATURE, DEFAULT_OPENAI_TEMPERATURE),
+    timeoutMs: readIntegerEnv(env.ASU_TIMEOUT_MS, DEFAULT_OPENAI_TIMEOUT_MS),
   };
 }
 
@@ -116,9 +109,6 @@ export function readOpenAiCompatibleProviderConfig(
       env.OPENAI_TEMPERATURE,
       DEFAULT_OPENAI_TEMPERATURE,
     ),
-    timeoutMs: readIntegerEnv(
-      env.OPENAI_TIMEOUT_MS,
-      DEFAULT_OPENAI_TIMEOUT_MS,
-    ),
+    timeoutMs: readIntegerEnv(env.OPENAI_TIMEOUT_MS, DEFAULT_OPENAI_TIMEOUT_MS),
   });
 }

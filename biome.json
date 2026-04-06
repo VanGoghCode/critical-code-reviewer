@@ -12,7 +12,7 @@
     }
   },
   "files": {
-    "ignore": ["dist", "sandbox/dist", "node_modules", "coverage"]
+    "ignore": ["dist", "sandbox/dist", "node_modules", "coverage", ".vercel"]
   },
   "linter": {
     "enabled": true,

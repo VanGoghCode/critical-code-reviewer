@@ -18,11 +18,7 @@ import {
   loadAvailableArchitectures,
   validatePromptCoverage,
 } from "./core/manifest";
-import type {
-  LogEntry,
-  ReviewProvider,
-  ReviewRequest,
-} from "./core/types";
+import type { LogEntry, ReviewProvider, ReviewRequest } from "./core/types";
 
 const repositoryRoot = process.cwd();
 const promptRoot = process.env.PROMPT_ROOT || "prompts";
@@ -30,17 +26,14 @@ const port = Number.parseInt(process.env.PORT || "3030", 10);
 
 function createProvider(): ReviewProvider {
   const providerMode =
-    process.env.CCR_PROVIDER ??
-    (process.env.ASU_API_KEY ? "asu" : "openai");
+    process.env.CCR_PROVIDER ?? (process.env.ASU_API_KEY ? "asu" : "openai");
 
   if (providerMode === "asu") {
     return createAsuAimlProvider(readAsuAimlProviderConfig());
   }
 
   if (providerMode === "openai") {
-    return createOpenAiCompatibleProvider(
-      readOpenAiCompatibleProviderConfig(),
-    );
+    return createOpenAiCompatibleProvider(readOpenAiCompatibleProviderConfig());
   }
 
   throw new Error(
@@ -68,6 +61,7 @@ function readPromptOverrides(
 }
 
 const app = express();
+export default app;
 const clientBuildDir = path.resolve(repositoryRoot, "sandbox", "dist");
 
 const provider = createProvider();
@@ -173,9 +167,11 @@ app.use(
   },
 );
 
-const server = app.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.info(`CCR server listening on http://127.0.0.1:${port}`);
-});
+if (!process.env.VERCEL) {
+  const server = app.listen(port, () => {
+    // eslint-disable-next-line no-console
+    console.info(`CCR server listening on http://127.0.0.1:${port}`);
+  });
 
-server.timeout = 300000;
+  server.timeout = 300000;
+}

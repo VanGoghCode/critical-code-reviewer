@@ -29761,7 +29761,14 @@ function formatList(values) {
   return values.map((value) => `- ${value}`).join("\n");
 }
 function renderReviewMarkdown(params) {
-  const { architecture, request, modelOutput, stageOutputs, rawOutput, prompt } = params;
+  const {
+    architecture,
+    request,
+    modelOutput,
+    stageOutputs,
+    rawOutput,
+    prompt
+  } = params;
   const title = `CCR Review for ${architecture.label}`;
   const contextLines = [
     `- Architecture: ${architecture.label} (${architecture.id})`,

@@ -1,0 +1,6 @@
+
+> ccr-action@0.1.0 lint
+> biome check .
+
+Checked 47 files in 36ms. No fixes applied.
+Found 9 errors.
