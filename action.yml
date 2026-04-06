@@ -85,7 +85,7 @@ outputs:
     description: Number of findings skipped while building inline pull request comments.
 runs:
   using: node20
-  main: dist/index.js
+  main: dist/index.cjs
 branding:
   icon: search
   color: blue

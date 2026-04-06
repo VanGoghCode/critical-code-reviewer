@@ -217,7 +217,7 @@ npm run typecheck
 1. Publish a versioned release tag, for example `v1.0.0`.
 2. Move the major tag `v1` to the latest compatible `v1.x.y` release commit.
 3. Ask consumers to pin either `@v1` for compatibility or a full commit SHA for maximum reproducibility.
-4. Keep the committed `dist/index.js` in sync with the TypeScript source by rebuilding before each release.
+4. Keep the committed `dist/index.cjs` in sync with the TypeScript source by rebuilding before each release.
 
 ## Notes
 

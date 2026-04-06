@@ -8,8 +8,8 @@ await build({
   bundle: true,
   platform: "node",
   target: "node20",
-  format: "esm",
-  outfile: "dist/index.js",
+  format: "cjs",
+  outfile: "dist/index.cjs",
   sourcemap: true,
   logLevel: "info",
   define: {
