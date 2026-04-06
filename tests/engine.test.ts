@@ -154,4 +154,119 @@ describe("review engine", () => {
       vi.useRealTimers();
     }
   });
+
+  it("chains iterative stages with only the immediate previous output", async () => {
+    const architecture = await loadArchitectureById("prompts", "iterative");
+    const logger = createLogger(() => {
+      return;
+    });
+
+    const callHistory: Array<{
+      stageId: string;
+      previousOutputs: string[];
+    }> = [];
+
+    const provider: ReviewProvider = {
+      async review(input: ReviewProviderRequest): Promise<string> {
+        callHistory.push({
+          stageId: input.stage.id,
+          previousOutputs: [...input.previousOutputs],
+        });
+
+        return JSON.stringify({
+          summary: `Output for ${input.stage.id}`,
+          riskLevel: "low",
+          findings: [],
+          todos: [],
+          notes: [],
+        });
+      },
+    };
+
+    await runReviewArchitecture({
+      architecture,
+      request: {
+        architectureId: architecture.id,
+        files: [
+          {
+            path: "src/example.ts",
+            name: "example.ts",
+            content: "export const value = 1;\n",
+          },
+        ],
+      },
+      provider,
+      logger,
+      maxContextChars: 8000,
+    });
+
+    expect(callHistory).toHaveLength(6);
+    expect(callHistory[0]?.previousOutputs).toEqual([]);
+
+    callHistory.slice(1).forEach((call, index) => {
+      const previousStageId = `stage-${index + 1}`;
+      expect(call.previousOutputs).toHaveLength(1);
+      const previousOutput = JSON.parse(call.previousOutputs[0] ?? "{}");
+      expect(previousOutput.summary).toBe(`Output for ${previousStageId}`);
+    });
+  });
+
+  it("provides parsed previous outputs in iterative user envelope", async () => {
+    const architecture = await loadArchitectureById("prompts", "iterative");
+    const logger = createLogger(() => {
+      return;
+    });
+
+    let stageTwoEnvelope: Record<string, unknown> | undefined;
+
+    const provider: ReviewProvider = {
+      async review(input: ReviewProviderRequest): Promise<string> {
+        if (input.stage.id === "stage-2") {
+          const userMessage = input.messages.find(
+            (message) => message.role === "user",
+          );
+          stageTwoEnvelope = userMessage?.content
+            ? (JSON.parse(userMessage.content) as Record<string, unknown>)
+            : undefined;
+        }
+
+        return JSON.stringify({
+          summary: `Output for ${input.stage.id}`,
+          riskLevel: "low",
+          findings: [],
+          todos: [],
+          notes: [],
+        });
+      },
+    };
+
+    await runReviewArchitecture({
+      architecture,
+      request: {
+        architectureId: architecture.id,
+        files: [
+          {
+            path: "src/example.ts",
+            name: "example.ts",
+            content: "export const value = 1;\n",
+          },
+        ],
+      },
+      provider,
+      logger,
+      maxContextChars: 8000,
+    });
+
+    expect(stageTwoEnvelope).toBeTruthy();
+
+    const previousOutputs = stageTwoEnvelope?.previousOutputs;
+    expect(Array.isArray(previousOutputs)).toBe(true);
+    expect((previousOutputs as unknown[]).length).toBe(1);
+
+    const previousOutputsParsed = stageTwoEnvelope?.previousOutputsParsed;
+    expect(Array.isArray(previousOutputsParsed)).toBe(true);
+    expect((previousOutputsParsed as Array<{ summary?: string }>)[0]?.summary).toBe(
+      "Output for stage-1",
+    );
+  });
 });

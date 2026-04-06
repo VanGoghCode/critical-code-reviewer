@@ -237,6 +237,7 @@ export function PromptEditor({
       : `${missingPromptLabels.length} required instruction(s) missing`;
   const sampleJson = buildSamplePromptJson(architecture);
   const hasCollapsiblePrompts = architecture.mode !== "single";
+  const showsSequentialHint = architecture.mode === "sequential";
 
   function isPromptCollapsed(promptId: string): boolean {
     if (!hasCollapsiblePrompts) {
@@ -286,6 +287,20 @@ export function PromptEditor({
         Fill all required instruction boxes before running. If helpful, you can
         import JSON and still edit each field after import.
       </p>
+
+      {showsSequentialHint ? (
+        <div className="sequence-hint" role="note" aria-live="polite">
+          <p>
+            Iterative flow: Stage 1 runs with files + Stage 1 instructions. Each
+            next stage receives files + its own instructions + only the previous
+            stage output.
+          </p>
+          <p>
+            Example chain: Stage 2 uses output from Stage 1, Stage 3 uses output
+            from Stage 2, and this continues through Stage 6.
+          </p>
+        </div>
+      ) : null}
 
       <div className="button-row">
         <button

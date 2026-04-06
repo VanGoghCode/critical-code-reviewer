@@ -31,7 +31,7 @@ export function LLMInspector({
   runStatus,
 }: LLMInspectorProps) {
   return (
-    <div className="panel stack" style={{ margin: "1rem" }}>
+    <div className="panel stack">
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Details</p>
@@ -55,7 +55,15 @@ export function LLMInspector({
         </div>
 
         <div className="field compact-field">
-          <span>Exact LLM Response</span>
+          <span className="field-label-inline">
+            <span>Exact LLM Response</span>
+            {runStatus === "running" ? (
+              <span className="inline-loader" role="status" aria-live="polite">
+                <span className="inline-loader-spinner" aria-hidden="true" />
+                Running...
+              </span>
+            ) : null}
+          </span>
           <div className="muted" style={{ marginBottom: "0.5rem" }}>
             Time: {runMetrics ? formatDuration(runMetrics.durationMs) : "-"} |
             Tokens: {runMetrics ? runMetrics.usage.totalTokens : "-"} |

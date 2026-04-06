@@ -91,7 +91,9 @@ app.post("/api/review", async (request, response, next) => {
       request.body?.context && typeof request.body.context === "object"
         ? request.body.context
         : undefined;
-    const promptOverrides = readPromptOverrides(request.body?.promptOverrides);
+    const promptOverrides =
+      readPromptOverrides(request.body?.promptOverrides) ??
+      readPromptOverrides(request.body?.instructions);
 
     const architecture = applyPromptOverrides(
       await loadArchitectureById(promptRoot, architectureId),

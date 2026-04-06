@@ -37,6 +37,19 @@ function truncateText(value: string, limit: number): string {
   return `${value.slice(0, limit)}\n... [truncated ${value.length - limit} characters]`;
 }
 
+function tryParseJson(value: string): unknown {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return value;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
 function buildRequestEnvelope(
   request: ReviewRequest,
   previousOutputs: string[],
@@ -76,6 +89,9 @@ function buildRequestEnvelope(
       previousOutputs: previousOutputs.map((output) =>
         truncateText(output, previousOutputBudget),
       ),
+      previousOutputsParsed: previousOutputs.map((output) =>
+        tryParseJson(output),
+      ),
     },
     null,
     2,
@@ -97,6 +113,7 @@ function buildSystemMessage(
     "Return a JSON object with the following keys: summary, riskLevel, findings, todos, notes.",
     "Risk level must be one of low, medium, or high.",
     "Findings should be an array of objects with severity, title, detail, and optional file and recommendation fields.",
+    "If previousOutputsParsed is present, use it as the authoritative previous-stage context to avoid escaped JSON artifacts.",
     "Do not wrap the JSON in Markdown fences.",
   ].join("\n");
 }
@@ -374,7 +391,7 @@ export async function runReviewArchitecture(params: {
   }
 
   if (architecture.mode === "sequential") {
-    const previousOutputs: string[] = [];
+    let previousStageOutput: string | undefined;
     for (const [index, stage] of architecture.stages.entries()) {
       const result = await executeStage({
         architecture,
@@ -382,14 +399,14 @@ export async function runReviewArchitecture(params: {
         stageCount,
         stage,
         request,
-        previousOutputs: [...previousOutputs],
+        previousOutputs: previousStageOutput ? [previousStageOutput] : [],
         provider,
         logger,
         mode: architecture.mode,
         maxContextChars,
       });
       stageOutputs.push(result);
-      previousOutputs.push(result.output);
+      previousStageOutput = result.output;
     }
 
     const finalStageResult = stageOutputs.at(-1);
