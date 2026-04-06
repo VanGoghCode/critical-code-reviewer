@@ -133,6 +133,7 @@ app.post("/api/review", async (request, response, next) => {
       report: result.report,
       sentPrompt,
       rawModelOutput,
+      metrics: result.metrics,
     });
   } catch (error) {
     next(error);

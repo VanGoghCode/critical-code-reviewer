@@ -1,9 +1,5 @@
-import { useEffect, useReducer, useRef, useState } from "react";
-import {
-  fetchArchitectures,
-  startSandboxRun,
-  subscribeToSandboxRun,
-} from "./api";
+import { useEffect, useReducer, useState } from "react";
+import { fetchArchitectures, startSandboxRun } from "./api";
 import { ArchitectureSwitcher } from "./components/ArchitectureSwitcher";
 import { FileSetEditor } from "./components/FileSetEditor";
 import { LLMInspector } from "./components/LLMInspector";
@@ -33,7 +29,6 @@ export function App() {
   const [showOutput, setShowOutput] = useState(false);
   const [promptImportValidationError, setPromptImportValidationError] =
     useState<string | null>(null);
-  const streamRef = useRef<EventSource | null>(null);
 
   function appendClientLog(
     level: ClientLogLevel,
@@ -80,7 +75,6 @@ export function App() {
 
     return () => {
       active = false;
-      streamRef.current?.close();
     };
   }, []);
 
@@ -141,7 +135,6 @@ export function App() {
       return;
     }
 
-    streamRef.current?.close();
     dispatch({ type: "clear-run" });
     dispatch({ type: "set-run-status", status: "running" });
     appendClientLog("info", "Submitting review run.", {
@@ -152,75 +145,28 @@ export function App() {
     try {
       const reviewRequest = buildReviewRequest(state);
       const response = await startSandboxRun(reviewRequest);
-      appendClientLog("info", "Review run accepted by sandbox API.", {
-        runId: response.runId,
+      appendClientLog("info", "Review run completed.", {
+        markdownLength: response.report.markdown.length,
+      });
+
+      dispatch({
+        type: "set-prompt-sent",
+        prompt: response.sentPrompt ?? "",
+      });
+      dispatch({
+        type: "set-run-metrics",
+        metrics: response.metrics,
+      });
+      dispatch({
+        type: "set-output",
+        markdown: response.report.markdown,
+        rawModelOutput:
+          response.rawModelOutput ?? response.report.rawModelOutput,
       });
       dispatch({
         type: "set-run-status",
-        status: "running",
-        runId: response.runId,
+        status: "completed",
       });
-
-      const source = subscribeToSandboxRun(response.runId, {
-        onLog: (entry) => dispatch({ type: "append-log", entry }),
-        onResult: (report) => {
-          dispatch({
-            type: "append-log",
-            entry: {
-              timestamp: new Date().toISOString(),
-              level: "info",
-              message: "Review run completed.",
-              details: {
-                runId: response.runId,
-                markdownLength: report.markdown.length,
-              },
-            },
-          });
-          dispatch({
-            type: "set-output",
-            markdown: report.markdown,
-            rawModelOutput: report.rawModelOutput,
-          });
-          dispatch({
-            type: "set-run-status",
-            status: "completed",
-            runId: response.runId,
-          });
-          source.close();
-        },
-        onError: (error) => {
-          dispatch({
-            type: "append-log",
-            entry: {
-              timestamp: new Date().toISOString(),
-              level: "error",
-              message: "Review run failed.",
-              details: {
-                runId: response.runId,
-                error,
-              },
-            },
-          });
-          dispatch({
-            type: "set-run-status",
-            status: "failed",
-            runId: response.runId,
-            errorMessage: error,
-          });
-          source.close();
-        },
-        onStatus: (status) => {
-          if (status === "completed") {
-            dispatch({
-              type: "set-run-status",
-              status: "completed",
-              runId: response.runId,
-            });
-          }
-        },
-      });
-
-      streamRef.current = source;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       appendClientLog("error", "Unable to start review run.", {
@@ -308,39 +254,14 @@ export function App() {
             View report
           </button>
 
-          {state.runStatus === "running" ? (
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => {
-                streamRef.current?.close();
-                dispatch({
-                  type: "append-log",
-                  entry: {
-                    timestamp: new Date().toISOString(),
-                    level: "warn",
-                    message: "Review run cancelled by user.",
-                  },
-                });
-                dispatch({
-                  type: "set-run-status",
-                  status: "failed",
-                  errorMessage: "Review aborted by user.",
-                });
-              }}
-            >
-              Cancel review
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => void runSandboxReview()}
-              disabled={!canRunReview}
-            >
-              Run review
-            </button>
-          )}
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void runSandboxReview()}
+            disabled={!canRunReview || state.runStatus === "running"}
+          >
+            Run review
+          </button>
         </div>
       </header>
 
@@ -431,6 +352,7 @@ export function App() {
       <LLMInspector
         promptText={state.sentPrompt}
         rawModelOutput={state.rawModelOutput}
+        runMetrics={state.runMetrics}
         runStatus={state.runStatus}
       />
 

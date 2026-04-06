@@ -1,12 +1,33 @@
+import type { ReviewRunMetrics } from "../../../src/core/types";
+
 export interface LLMInspectorProps {
   promptText: string;
   rawModelOutput: string;
+  runMetrics?: ReviewRunMetrics;
   runStatus: "idle" | "running" | "completed" | "failed";
+}
+
+function formatDuration(durationMs: number): string {
+  if (durationMs < 1000) {
+    return `${durationMs} ms`;
+  }
+
+  return `${(durationMs / 1000).toFixed(2)} s`;
+}
+
+function formatCurrencyUsd(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 6,
+  }).format(value);
 }
 
 export function LLMInspector({
   promptText,
   rawModelOutput,
+  runMetrics,
   runStatus,
 }: LLMInspectorProps) {
   return (
@@ -35,6 +56,11 @@ export function LLMInspector({
 
         <div className="field compact-field">
           <span>Exact LLM Response</span>
+          <div className="muted" style={{ marginBottom: "0.5rem" }}>
+            Time: {runMetrics ? formatDuration(runMetrics.durationMs) : "-"} |
+            Tokens: {runMetrics ? runMetrics.usage.totalTokens : "-"} |
+            Est. cost: {runMetrics ? formatCurrencyUsd(runMetrics.estimatedCostUsd) : "-"}
+          </div>
           <textarea
             readOnly
             rows={15}

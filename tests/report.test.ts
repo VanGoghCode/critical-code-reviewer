@@ -59,6 +59,13 @@ describe("report rendering", () => {
           label: "Review",
           output: "{}",
           prompt: "test prompt",
+          durationMs: 100,
+          usage: {
+            promptTokens: 100,
+            completionTokens: 50,
+            totalTokens: 150,
+          },
+          estimatedCostUsd: 0.00125,
         },
       ],
       rawOutput: "{}",

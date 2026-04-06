@@ -6,6 +6,7 @@ import type {
   ReviewProvider,
   ReviewProviderMessage,
   ReviewProviderRequest,
+  ReviewProviderResult,
 } from "./types.js";
 
 function toCompletionUrl(baseUrl: string): string {
@@ -26,13 +27,26 @@ function buildRequestBody(
   };
 }
 
-function parseChatCompletionContent(rawBody: string): string {
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return value;
+}
+
+function parseChatCompletionContent(rawBody: string): ReviewProviderResult {
   const parsed = JSON.parse(rawBody) as {
     choices?: Array<{
       message?: {
         content?: string | null;
       };
     }>;
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+    };
   };
 
   const content = parsed.choices?.[0]?.message?.content;
@@ -42,7 +56,14 @@ function parseChatCompletionContent(rawBody: string): string {
     );
   }
 
-  return content;
+  return {
+    output: content,
+    usage: {
+      promptTokens: toFiniteNumber(parsed.usage?.prompt_tokens),
+      completionTokens: toFiniteNumber(parsed.usage?.completion_tokens),
+      totalTokens: toFiniteNumber(parsed.usage?.total_tokens),
+    },
+  };
 }
 
 export async function fetchWithAbort(
@@ -66,7 +87,7 @@ export async function fetchWithAbort(
 export async function requestOpenAiCompatibleChatCompletion(
   config: OpenAiCompatibleProviderConfig,
   messages: ReviewProviderMessage[],
-): Promise<string> {
+): Promise<ReviewProviderResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
@@ -115,24 +136,46 @@ function convertMessagesToAsuFormat(messages: ReviewProviderMessage[]): {
   };
 }
 
-function parseAsuAimlResponse(rawBody: string): string {
+function parseAsuAimlResponse(rawBody: string): ReviewProviderResult {
   const parsed = JSON.parse(rawBody) as Record<string, unknown>;
 
-  if (typeof parsed.response === "string") return parsed.response;
-  if (typeof parsed.output === "string") return parsed.output;
-  if (typeof parsed.result === "string") return parsed.result;
-  if (typeof parsed.content === "string") return parsed.content;
+  const usageCandidate =
+    (parsed.usage as Record<string, unknown> | undefined) ??
+    (parsed.metrics as Record<string, unknown> | undefined);
+  const usage = usageCandidate
+    ? {
+        promptTokens: toFiniteNumber(
+          usageCandidate.prompt_tokens ?? usageCandidate.input_tokens,
+        ),
+        completionTokens: toFiniteNumber(
+          usageCandidate.completion_tokens ?? usageCandidate.output_tokens,
+        ),
+        totalTokens: toFiniteNumber(usageCandidate.total_tokens),
+      }
+    : undefined;
+
+  const withResult = (output: string): ReviewProviderResult => ({
+    output,
+    usage,
+  });
+
+  if (typeof parsed.response === "string") return withResult(parsed.response);
+  if (typeof parsed.output === "string") return withResult(parsed.output);
+  if (typeof parsed.result === "string") return withResult(parsed.result);
+  if (typeof parsed.content === "string") return withResult(parsed.content);
 
   const choices = parsed.choices as
     | Array<{ message?: { content?: string } }>
     | undefined;
-  if (choices?.[0]?.message?.content) return choices[0].message.content;
+  if (choices?.[0]?.message?.content) {
+    return withResult(choices[0].message.content);
+  }
 
   const resp = parsed.response as Record<string, unknown> | undefined;
   if (resp && typeof resp === "object") {
-    if (typeof resp.content === "string") return resp.content;
-    if (typeof resp.text === "string") return resp.text;
-    if (typeof resp.message === "string") return resp.message;
+    if (typeof resp.content === "string") return withResult(resp.content);
+    if (typeof resp.text === "string") return withResult(resp.text);
+    if (typeof resp.message === "string") return withResult(resp.message);
   }
 
   throw new Error(
@@ -143,7 +186,7 @@ function parseAsuAimlResponse(rawBody: string): string {
 export async function requestAsuAimlChatCompletion(
   config: AsuAimlProviderConfig,
   messages: ReviewProviderMessage[],
-): Promise<string> {
+): Promise<ReviewProviderResult> {
   const { systemPrompt, query } = convertMessagesToAsuFormat(messages);
 
   const body: Record<string, unknown> = {
@@ -199,7 +242,7 @@ export function createAsuAimlProvider(
   config: AsuAimlProviderConfig,
 ): ReviewProvider {
   return {
-    async review(input: ReviewProviderRequest): Promise<string> {
+    async review(input: ReviewProviderRequest): Promise<ReviewProviderResult> {
       try {
         return await requestAsuAimlChatCompletion(config, input.messages);
       } catch (error) {
@@ -214,7 +257,7 @@ export function createOpenAiCompatibleProvider(
   config: OpenAiCompatibleProviderConfig,
 ): ReviewProvider {
   return {
-    async review(input: ReviewProviderRequest): Promise<string> {
+    async review(input: ReviewProviderRequest): Promise<ReviewProviderResult> {
       try {
         return await requestOpenAiCompatibleChatCompletion(
           config,

@@ -37,7 +37,7 @@
     {
       "id": "stage-6",
       "label": "Stage 6",
-      "purpose": "Synthesize the review into the final CCR.md output.",
+      "purpose": "Review documentation, clarity, and communication quality.",
       "promptPath": "shared/stages/stage-6.md"
     }
   ],

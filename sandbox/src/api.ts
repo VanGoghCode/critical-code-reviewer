@@ -1,7 +1,7 @@
 import type {
   LoadedPromptArchitecture,
-  LogEntry,
   ReviewFileInput,
+  ReviewRunMetrics,
   ReviewReport,
   ReviewRequest,
 } from "../../src/core/types";
@@ -11,8 +11,10 @@ export interface FetchArchitecturesResponse {
 }
 
 export interface StartRunResponse {
-  runId: string;
-  status: string;
+  report: ReviewReport;
+  sentPrompt?: string;
+  rawModelOutput?: string;
+  metrics?: ReviewRunMetrics;
 }
 
 export interface SandboxChatMessage {
@@ -24,13 +26,6 @@ export interface SandboxChatResponse {
   mode: string;
   model?: string;
   reply: string;
-}
-
-export interface SandboxRunHandlers {
-  onLog?: (entry: LogEntry) => void;
-  onResult?: (report: ReviewReport) => void;
-  onError?: (error: string) => void;
-  onStatus?: (status: string) => void;
 }
 
 export async function fetchArchitectures(): Promise<
@@ -48,7 +43,7 @@ export async function fetchArchitectures(): Promise<
 export async function startSandboxRun(
   request: ReviewRequest,
 ): Promise<StartRunResponse> {
-  const response = await fetch("/api/runs", {
+  const response = await fetch("/api/review", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -57,7 +52,7 @@ export async function startSandboxRun(
   });
 
   if (!response.ok) {
-    throw new Error(`Unable to start sandbox run: ${response.status}`);
+    throw new Error(`Unable to start sandbox review: ${response.status}`);
   }
 
   return (await response.json()) as StartRunResponse;
@@ -83,58 +78,6 @@ export async function sendSandboxChatMessage(params: {
   }
 
   return JSON.parse(rawBody) as SandboxChatResponse;
-}
-
-export function subscribeToSandboxRun(
-  runId: string,
-  handlers: SandboxRunHandlers,
-): EventSource {
-  const source = new EventSource(`/api/runs/${runId}/events`);
-
-  source.addEventListener("log", (event) => {
-    const messageEvent = event as MessageEvent<string>;
-    if (!messageEvent.data) {
-      return;
-    }
-
-    handlers.onLog?.(JSON.parse(messageEvent.data) as LogEntry);
-  });
-  source.addEventListener("result", (event) => {
-    const messageEvent = event as MessageEvent<string>;
-    if (!messageEvent.data) {
-      return;
-    }
-
-    const payload = JSON.parse(messageEvent.data) as { report?: ReviewReport };
-    if (payload.report) {
-      handlers.onResult?.(payload.report);
-    }
-  });
-
-  source.addEventListener("error", (event) => {
-    const messageEvent = event as MessageEvent<string>;
-    if (!messageEvent.data) {
-      handlers.onError?.("The sandbox stream disconnected.");
-      return;
-    }
-
-    const payload = JSON.parse(messageEvent.data) as { error?: string };
-    handlers.onError?.(payload.error ?? "The sandbox stream failed.");
-  });
-
-  source.addEventListener("status", (event) => {
-    const messageEvent = event as MessageEvent<string>;
-    if (!messageEvent.data) {
-      return;
-    }
-
-    const payload = JSON.parse(messageEvent.data) as { status?: string };
-    if (payload.status) {
-      handlers.onStatus?.(payload.status);
-    }
-  });
-
-  return source;
 }
 
 export function toReviewRequestPayload(

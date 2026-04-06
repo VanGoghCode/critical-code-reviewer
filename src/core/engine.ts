@@ -2,12 +2,32 @@ import { parseReviewModelOutput, renderReviewMarkdown } from "./report.js";
 import type {
   LoadedPromptArchitecture,
   ReviewLogger,
+  ReviewProviderResult,
   ReviewProvider,
   ReviewProviderMessage,
   ReviewRequest,
   ReviewRunResult,
+  ReviewTokenUsage,
   StageExecutionResult,
 } from "./types.js";
+
+const PARALLEL_STAGE_LAUNCH_GAP_MS = 1000;
+const DEFAULT_INPUT_COST_PER_1M_USD = Number(
+  process.env.CCR_EST_INPUT_COST_PER_1M_USD ?? "5",
+);
+const DEFAULT_OUTPUT_COST_PER_1M_USD = Number(
+  process.env.CCR_EST_OUTPUT_COST_PER_1M_USD ?? "15",
+);
+
+function waitForDelay(milliseconds: number): Promise<void> {
+  if (milliseconds <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
 
 function truncateText(value: string, limit: number): string {
   if (value.length <= limit) {
@@ -126,6 +146,114 @@ function createMessages(params: {
   return messages;
 }
 
+function estimateTokensFromText(value: string): number {
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return 0;
+  }
+
+  return Math.max(1, Math.ceil(normalized.length / 4));
+}
+
+function normalizeUsage(
+  usage: Partial<ReviewTokenUsage> | undefined,
+  messages: ReviewProviderMessage[],
+  output: string,
+): ReviewTokenUsage {
+  const fallbackPromptTokens = estimateTokensFromText(
+    messages.map((message) => message.content).join("\n\n"),
+  );
+  const fallbackCompletionTokens = estimateTokensFromText(output);
+
+  const promptTokens =
+    typeof usage?.promptTokens === "number" && Number.isFinite(usage.promptTokens)
+      ? Math.max(0, Math.round(usage.promptTokens))
+      : fallbackPromptTokens;
+  const completionTokens =
+    typeof usage?.completionTokens === "number" &&
+    Number.isFinite(usage.completionTokens)
+      ? Math.max(0, Math.round(usage.completionTokens))
+      : fallbackCompletionTokens;
+  const totalTokens =
+    typeof usage?.totalTokens === "number" && Number.isFinite(usage.totalTokens)
+      ? Math.max(0, Math.round(usage.totalTokens))
+      : promptTokens + completionTokens;
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+  };
+}
+
+function estimateCostUsd(usage: ReviewTokenUsage): number {
+  const inputCost =
+    (usage.promptTokens / 1_000_000) * DEFAULT_INPUT_COST_PER_1M_USD;
+  const outputCost =
+    (usage.completionTokens / 1_000_000) * DEFAULT_OUTPUT_COST_PER_1M_USD;
+  return Number((inputCost + outputCost).toFixed(6));
+}
+
+function normalizeProviderResult(
+  rawResult: string | ReviewProviderResult,
+  messages: ReviewProviderMessage[],
+): {
+  output: string;
+  usage: ReviewTokenUsage;
+  estimatedCostUsd: number;
+} {
+  if (typeof rawResult === "string") {
+    const usage = normalizeUsage(undefined, messages, rawResult);
+    return {
+      output: rawResult,
+      usage,
+      estimatedCostUsd: estimateCostUsd(usage),
+    };
+  }
+
+  const output = rawResult.output;
+  const usage = normalizeUsage(rawResult.usage, messages, output);
+  return {
+    output,
+    usage,
+    estimatedCostUsd:
+      typeof rawResult.estimatedCostUsd === "number" &&
+      Number.isFinite(rawResult.estimatedCostUsd)
+        ? Number(rawResult.estimatedCostUsd.toFixed(6))
+        : estimateCostUsd(usage),
+  };
+}
+
+function aggregateRunMetrics(
+  startedAtMs: number,
+  stageOutputs: StageExecutionResult[],
+) {
+  const usage = stageOutputs.reduce<ReviewTokenUsage>(
+    (current, stage) => ({
+      promptTokens: current.promptTokens + stage.usage.promptTokens,
+      completionTokens: current.completionTokens + stage.usage.completionTokens,
+      totalTokens: current.totalTokens + stage.usage.totalTokens,
+    }),
+    {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+    },
+  );
+
+  const estimatedCostUsd = Number(
+    stageOutputs
+      .reduce((current, stage) => current + stage.estimatedCostUsd, 0)
+      .toFixed(6),
+  );
+
+  return {
+    durationMs: Math.max(0, Date.now() - startedAtMs),
+    usage,
+    estimatedCostUsd,
+  };
+}
+
 async function executeStage(params: {
   architecture: LoadedPromptArchitecture;
   stageIndex: number;
@@ -162,6 +290,7 @@ async function executeStage(params: {
     promptMessages: messages, // Log exact prompt sent to LLM
   });
 
+  const stageStartedAtMs = Date.now();
   const rawResult = await params.provider.review({
     architecture: params.architecture,
     stage: params.stage,
@@ -171,13 +300,17 @@ async function executeStage(params: {
     previousOutputs: params.previousOutputs,
   });
 
-  const output = rawResult;
+  const normalized = normalizeProviderResult(rawResult, messages);
+  const durationMs = Math.max(0, Date.now() - stageStartedAtMs);
 
   return {
     stageId: params.stage.id,
     label: params.stage.label,
-    output,
+    output: normalized.output,
     prompt: JSON.stringify(messages, null, 2),
+    durationMs,
+    usage: normalized.usage,
+    estimatedCostUsd: normalized.estimatedCostUsd,
   };
 }
 
@@ -189,6 +322,7 @@ export async function runReviewArchitecture(params: {
   maxContextChars?: number;
 }): Promise<ReviewRunResult> {
   const { architecture, request, provider, logger } = params;
+  const runStartedAtMs = Date.now();
   const maxContextChars = params.maxContextChars ?? 12000;
   logger.info("Starting review run", {
     architectureId: architecture.id,
@@ -235,6 +369,7 @@ export async function runReviewArchitecture(params: {
     return {
       report,
       stageOutputs,
+      metrics: aggregateRunMetrics(runStartedAtMs, stageOutputs),
     } satisfies ReviewRunResult;
   }
 
@@ -283,12 +418,26 @@ export async function runReviewArchitecture(params: {
     return {
       report,
       stageOutputs,
+      metrics: aggregateRunMetrics(runStartedAtMs, stageOutputs),
     } satisfies ReviewRunResult;
   }
 
   const parallelStageOutputs = await Promise.all(
-    architecture.stages.map((stage, index) =>
-      executeStage({
+    architecture.stages.map(async (stage, index) => {
+      const launchDelayMs = index * PARALLEL_STAGE_LAUNCH_GAP_MS;
+
+      if (launchDelayMs > 0) {
+        logger.info("Waiting before launching parallel stage", {
+          stageId: stage.id,
+          stageLabel: stage.label,
+          stageIndex: index,
+          stageNumber: index + 1,
+          launchDelayMs,
+        });
+        await waitForDelay(launchDelayMs);
+      }
+
+      return executeStage({
         architecture,
         stageIndex: index,
         stageCount,
@@ -299,8 +448,8 @@ export async function runReviewArchitecture(params: {
         logger,
         mode: architecture.mode,
         maxContextChars,
-      }),
-    ),
+      });
+    }),
   );
   stageOutputs.push(...parallelStageOutputs);
 
@@ -344,5 +493,6 @@ export async function runReviewArchitecture(params: {
   return {
     report,
     stageOutputs,
+    metrics: aggregateRunMetrics(runStartedAtMs, stageOutputs),
   } satisfies ReviewRunResult;
 }

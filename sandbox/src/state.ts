@@ -8,6 +8,7 @@ import type {
   LoadedPromptArchitecture,
   LogEntry,
   ReviewFileInput,
+  ReviewRunMetrics,
   ReviewRequest,
 } from "../../src/core/types";
 
@@ -35,6 +36,7 @@ export interface SandboxState {
   outputMarkdown: string;
   rawModelOutput: string;
   sentPrompt: string;
+  runMetrics?: ReviewRunMetrics;
   logs: SandboxLogItem[];
   runStatus: "idle" | "running" | "completed" | "failed";
   runId?: string;
@@ -67,6 +69,7 @@ type SandboxAction =
     }
   | { type: "append-log"; entry: LogEntry }
   | { type: "set-prompt-sent"; prompt: string }
+  | { type: "set-run-metrics"; metrics?: ReviewRunMetrics }
   | { type: "clear-run" }
   | { type: "set-output"; markdown: string; rawModelOutput?: string }
   | {
@@ -147,6 +150,7 @@ export function createInitialSandboxState(): SandboxState {
     outputMarkdown: "",
     rawModelOutput: "",
     sentPrompt: "",
+    runMetrics: undefined,
     logs: [],
     runStatus: "idle",
   };
@@ -342,6 +346,11 @@ export function sandboxReducer(
         ...state,
         sentPrompt: action.prompt,
       };
+    case "set-run-metrics":
+      return {
+        ...state,
+        runMetrics: action.metrics,
+      };
     case "clear-run":
       return {
         ...state,
@@ -349,6 +358,7 @@ export function sandboxReducer(
         outputMarkdown: "",
         rawModelOutput: "",
         sentPrompt: "",
+        runMetrics: undefined,
         errorMessage: undefined,
         runId: undefined,
         runStatus: "idle",
@@ -357,6 +367,7 @@ export function sandboxReducer(
       return {
         ...state,
         outputMarkdown: action.markdown,
+        rawModelOutput: action.rawModelOutput ?? state.rawModelOutput,
       };
     case "set-run-status":
       return {

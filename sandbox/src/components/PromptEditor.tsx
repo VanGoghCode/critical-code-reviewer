@@ -6,6 +6,7 @@ import {
   normalizePromptImport,
 } from "../../../src/core/prompt-config";
 import type { LoadedPromptArchitecture } from "../../../src/core/types";
+import { parsePromptInstructionsJson } from "../prompt-json";
 
 export interface PromptEditorProps {
   architecture?: LoadedPromptArchitecture;
@@ -89,7 +90,7 @@ function getJsonValidationError(
   }
 
   try {
-    const parsed = JSON.parse(rawText) as unknown;
+    const parsed = parsePromptInstructionsJson(rawText);
     const imported = normalizePromptImport(architecture, parsed);
     if (Object.keys(imported).length === 0) {
       return "Import JSON has no supported keys for this template.";
@@ -135,7 +136,7 @@ export function PromptEditor({
 
     // Auto-apply JSON instructions
     try {
-      const parsed = JSON.parse(jsonText) as unknown;
+      const parsed = parsePromptInstructionsJson(jsonText);
       const imported = normalizePromptImport(architecture, parsed);
       if (Object.keys(imported).length > 0) {
         onMergePromptDrafts(imported);
@@ -174,7 +175,7 @@ export function PromptEditor({
     }
 
     try {
-      const parsed = JSON.parse(rawText) as unknown;
+      const parsed = parsePromptInstructionsJson(rawText);
       const imported = normalizePromptImport(architecture, parsed);
       if (Object.keys(imported).length === 0) {
         throw new Error(

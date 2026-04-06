@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { runReviewArchitecture } from "../src/core/engine";
 import { createLogger } from "../src/core/logging";
 import { loadArchitectureById } from "../src/core/manifest";
-import type { ReviewProvider } from "../src/core/types";
+import type { ReviewProvider, ReviewProviderRequest } from "../src/core/types";
 
 function createTestProvider(): ReviewProvider {
   return {
@@ -76,5 +76,82 @@ describe("review engine", () => {
         expect(result.stageOutputs).toHaveLength(7);
       }
     },
+    15000,
   );
+
+  it("stages parallel runs with a 1 second launch gap and executes combine once", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-06T00:00:00.000Z"));
+
+    try {
+      const architecture = await loadArchitectureById("prompts", "parallel");
+      const logger = createLogger(() => {
+        return;
+      });
+
+      const callHistory: Array<{
+        stageId: string;
+        previousOutputsCount: number;
+        startedAt: number;
+      }> = [];
+
+      const provider: ReviewProvider = {
+        async review(input: ReviewProviderRequest): Promise<string> {
+          callHistory.push({
+            stageId: input.stage.id,
+            previousOutputsCount: input.previousOutputs.length,
+            startedAt: Date.now(),
+          });
+
+          return JSON.stringify({
+            summary: `Output for ${input.stage.id}`,
+            riskLevel: "low",
+            findings: [],
+            todos: [],
+            notes: [],
+          });
+        },
+      };
+
+      const runPromise = runReviewArchitecture({
+        architecture,
+        request: {
+          architectureId: architecture.id,
+          files: [
+            {
+              path: "src/example.ts",
+              name: "example.ts",
+              content: "export const value = 1;\n",
+            },
+          ],
+        },
+        provider,
+        logger,
+        maxContextChars: 8000,
+      });
+
+      await vi.runAllTimersAsync();
+      await runPromise;
+
+      const stageCalls = callHistory.filter(
+        (call) => call.stageId !== "combine",
+      );
+      const combineCalls = callHistory.filter(
+        (call) => call.stageId === "combine",
+      );
+
+      expect(stageCalls).toHaveLength(6);
+      expect(combineCalls).toHaveLength(1);
+
+      const baseline = stageCalls[0]?.startedAt ?? 0;
+      stageCalls.forEach((call, index) => {
+        expect(call.previousOutputsCount).toBe(0);
+        expect(call.startedAt - baseline).toBe(index * 1000);
+      });
+
+      expect(combineCalls[0]?.previousOutputsCount).toBe(6);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

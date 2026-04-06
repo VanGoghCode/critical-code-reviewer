@@ -120,8 +120,20 @@ export interface ReviewProviderRequest {
   previousOutputs: string[];
 }
 
+export interface ReviewTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface ReviewProviderResult {
+  output: string;
+  usage?: Partial<ReviewTokenUsage>;
+  estimatedCostUsd?: number;
+}
+
 export interface ReviewProvider {
-  review(input: ReviewProviderRequest): Promise<string>;
+  review(input: ReviewProviderRequest): Promise<string | ReviewProviderResult>;
 }
 
 export interface StageExecutionResult {
@@ -129,9 +141,19 @@ export interface StageExecutionResult {
   label: string;
   output: string;
   prompt: string;
+  durationMs: number;
+  usage: ReviewTokenUsage;
+  estimatedCostUsd: number;
+}
+
+export interface ReviewRunMetrics {
+  durationMs: number;
+  usage: ReviewTokenUsage;
+  estimatedCostUsd: number;
 }
 
 export interface ReviewRunResult {
   report: ReviewReport;
   stageOutputs: StageExecutionResult[];
+  metrics: ReviewRunMetrics;
 }

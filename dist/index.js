@@ -29840,6 +29840,21 @@ function renderReviewMarkdown(params) {
 }
 
 // src/core/engine.ts
+var PARALLEL_STAGE_LAUNCH_GAP_MS = 1e3;
+var DEFAULT_INPUT_COST_PER_1M_USD = Number(
+  process.env.CCR_EST_INPUT_COST_PER_1M_USD ?? "5"
+);
+var DEFAULT_OUTPUT_COST_PER_1M_USD = Number(
+  process.env.CCR_EST_OUTPUT_COST_PER_1M_USD ?? "15"
+);
+function waitForDelay(milliseconds) {
+  if (milliseconds <= 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
 function truncateText(value, limit) {
   if (value.length <= limit) {
     return value;
@@ -29923,6 +29938,71 @@ function createMessages(params) {
   });
   return messages;
 }
+function estimateTokensFromText(value) {
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return 0;
+  }
+  return Math.max(1, Math.ceil(normalized.length / 4));
+}
+function normalizeUsage(usage, messages, output) {
+  const fallbackPromptTokens = estimateTokensFromText(
+    messages.map((message) => message.content).join("\n\n")
+  );
+  const fallbackCompletionTokens = estimateTokensFromText(output);
+  const promptTokens = typeof usage?.promptTokens === "number" && Number.isFinite(usage.promptTokens) ? Math.max(0, Math.round(usage.promptTokens)) : fallbackPromptTokens;
+  const completionTokens = typeof usage?.completionTokens === "number" && Number.isFinite(usage.completionTokens) ? Math.max(0, Math.round(usage.completionTokens)) : fallbackCompletionTokens;
+  const totalTokens = typeof usage?.totalTokens === "number" && Number.isFinite(usage.totalTokens) ? Math.max(0, Math.round(usage.totalTokens)) : promptTokens + completionTokens;
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens
+  };
+}
+function estimateCostUsd(usage) {
+  const inputCost = usage.promptTokens / 1e6 * DEFAULT_INPUT_COST_PER_1M_USD;
+  const outputCost = usage.completionTokens / 1e6 * DEFAULT_OUTPUT_COST_PER_1M_USD;
+  return Number((inputCost + outputCost).toFixed(6));
+}
+function normalizeProviderResult(rawResult, messages) {
+  if (typeof rawResult === "string") {
+    const usage2 = normalizeUsage(void 0, messages, rawResult);
+    return {
+      output: rawResult,
+      usage: usage2,
+      estimatedCostUsd: estimateCostUsd(usage2)
+    };
+  }
+  const output = rawResult.output;
+  const usage = normalizeUsage(rawResult.usage, messages, output);
+  return {
+    output,
+    usage,
+    estimatedCostUsd: typeof rawResult.estimatedCostUsd === "number" && Number.isFinite(rawResult.estimatedCostUsd) ? Number(rawResult.estimatedCostUsd.toFixed(6)) : estimateCostUsd(usage)
+  };
+}
+function aggregateRunMetrics(startedAtMs, stageOutputs) {
+  const usage = stageOutputs.reduce(
+    (current, stage) => ({
+      promptTokens: current.promptTokens + stage.usage.promptTokens,
+      completionTokens: current.completionTokens + stage.usage.completionTokens,
+      totalTokens: current.totalTokens + stage.usage.totalTokens
+    }),
+    {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0
+    }
+  );
+  const estimatedCostUsd = Number(
+    stageOutputs.reduce((current, stage) => current + stage.estimatedCostUsd, 0).toFixed(6)
+  );
+  return {
+    durationMs: Math.max(0, Date.now() - startedAtMs),
+    usage,
+    estimatedCostUsd
+  };
+}
 async function executeStage(params) {
   const messages = createMessages({
     architecture: params.architecture,
@@ -29947,6 +30027,7 @@ async function executeStage(params) {
     promptMessages: messages
     // Log exact prompt sent to LLM
   });
+  const stageStartedAtMs = Date.now();
   const rawResult = await params.provider.review({
     architecture: params.architecture,
     stage: params.stage,
@@ -29955,16 +30036,21 @@ async function executeStage(params) {
     request: params.request,
     previousOutputs: params.previousOutputs
   });
-  const output = rawResult;
+  const normalized = normalizeProviderResult(rawResult, messages);
+  const durationMs = Math.max(0, Date.now() - stageStartedAtMs);
   return {
     stageId: params.stage.id,
     label: params.stage.label,
-    output,
-    prompt: JSON.stringify(messages, null, 2)
+    output: normalized.output,
+    prompt: JSON.stringify(messages, null, 2),
+    durationMs,
+    usage: normalized.usage,
+    estimatedCostUsd: normalized.estimatedCostUsd
   };
 }
 async function runReviewArchitecture(params) {
   const { architecture, request, provider, logger } = params;
+  const runStartedAtMs = Date.now();
   const maxContextChars = params.maxContextChars ?? 12e3;
   logger.info("Starting review run", {
     architectureId: architecture.id,
@@ -30004,7 +30090,8 @@ async function runReviewArchitecture(params) {
     });
     return {
       report: report2,
-      stageOutputs
+      stageOutputs,
+      metrics: aggregateRunMetrics(runStartedAtMs, stageOutputs)
     };
   }
   if (architecture.mode === "sequential") {
@@ -30047,12 +30134,24 @@ async function runReviewArchitecture(params) {
     });
     return {
       report: report2,
-      stageOutputs
+      stageOutputs,
+      metrics: aggregateRunMetrics(runStartedAtMs, stageOutputs)
     };
   }
   const parallelStageOutputs = await Promise.all(
-    architecture.stages.map(
-      (stage, index) => executeStage({
+    architecture.stages.map(async (stage, index) => {
+      const launchDelayMs = index * PARALLEL_STAGE_LAUNCH_GAP_MS;
+      if (launchDelayMs > 0) {
+        logger.info("Waiting before launching parallel stage", {
+          stageId: stage.id,
+          stageLabel: stage.label,
+          stageIndex: index,
+          stageNumber: index + 1,
+          launchDelayMs
+        });
+        await waitForDelay(launchDelayMs);
+      }
+      return executeStage({
         architecture,
         stageIndex: index,
         stageCount,
@@ -30063,8 +30162,8 @@ async function runReviewArchitecture(params) {
         logger,
         mode: architecture.mode,
         maxContextChars
-      })
-    )
+      });
+    })
   );
   stageOutputs.push(...parallelStageOutputs);
   const combineStage = architecture.combineStage;
@@ -30102,7 +30201,8 @@ async function runReviewArchitecture(params) {
   });
   return {
     report,
-    stageOutputs
+    stageOutputs,
+    metrics: aggregateRunMetrics(runStartedAtMs, stageOutputs)
   };
 }
 
@@ -30304,6 +30404,12 @@ function buildRequestBody(config, messages) {
     messages
   };
 }
+function toFiniteNumber(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return void 0;
+  }
+  return value;
+}
 function parseChatCompletionContent(rawBody) {
   const parsed = JSON.parse(rawBody);
   const content = parsed.choices?.[0]?.message?.content;
@@ -30312,7 +30418,14 @@ function parseChatCompletionContent(rawBody) {
       "Model response did not include a chat completion payload."
     );
   }
-  return content;
+  return {
+    output: content,
+    usage: {
+      promptTokens: toFiniteNumber(parsed.usage?.prompt_tokens),
+      completionTokens: toFiniteNumber(parsed.usage?.completion_tokens),
+      totalTokens: toFiniteNumber(parsed.usage?.total_tokens)
+    }
+  };
 }
 async function requestOpenAiCompatibleChatCompletion(config, messages) {
   const controller = new AbortController();
