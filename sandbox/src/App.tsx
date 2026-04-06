@@ -4,7 +4,6 @@ import {
   startSandboxRun,
   subscribeToSandboxRun,
 } from "./api";
-import { ApiTestWidget } from "./components/ApiTestWidget";
 import { ArchitectureSwitcher } from "./components/ArchitectureSwitcher";
 import { FileSetEditor } from "./components/FileSetEditor";
 import { LLMInspector } from "./components/LLMInspector";
@@ -444,8 +443,6 @@ export function App() {
         onCopy={() => void copyOutput()}
         onClose={() => setShowOutput(false)}
       />
-
-      <ApiTestWidget />
     </div>
   );
 }
