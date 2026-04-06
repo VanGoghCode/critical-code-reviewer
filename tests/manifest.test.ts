@@ -27,7 +27,7 @@ describe("architecture manifests", () => {
     expect(iterative?.stages).toHaveLength(6);
     expect(parallel?.stages).toHaveLength(6);
     expect(parallel?.combineStage?.id).toBe("combine");
-    expect(singlePass?.stages[0].promptText).toBe("");
+    expect(singlePass?.stages[0].promptText.trim().length).toBeGreaterThan(0);
   });
 
   it("applies shorthand overrides to the loaded sequential architecture", async () => {
@@ -61,7 +61,7 @@ describe("architecture manifests", () => {
     expect(() => validatePromptCoverage(applied)).not.toThrow();
   });
 
-  it("rejects incomplete prompt coverage for the loaded architectures", async () => {
+  it("rejects incomplete prompt coverage when a required prompt is cleared", async () => {
     const architectures = await loadAvailableArchitectures("prompts");
     const singlePass = architectures.find(
       (architecture) => architecture.id === "single-pass",
@@ -72,7 +72,11 @@ describe("architecture manifests", () => {
       throw new Error("Expected the single-pass architecture to load.");
     }
 
-    expect(() => validatePromptCoverage(singlePass)).toThrow(
+    const incomplete = applyPromptOverrides(singlePass, {
+      review: "",
+    });
+
+    expect(() => validatePromptCoverage(incomplete)).toThrow(
       /Prompt text is required/,
     );
   });

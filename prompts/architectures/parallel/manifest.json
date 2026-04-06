@@ -1,50 +1,50 @@
 {
   "id": "parallel",
   "label": "Parallel Ensemble",
-  "description": "Independent review prompts run in parallel and are merged by a final combiner prompt.",
+  "description": "Six fairness and governance dimensions run in parallel and are merged into a single deduplicated audit report.",
   "mode": "parallel",
   "stages": [
     {
       "id": "stage-1",
-      "label": "Stage 1",
-      "purpose": "Find correctness risks in the supplied change set.",
+      "label": "Data Fairness",
+      "purpose": "Assess fair and representative training and evaluation data coverage, group definitions, and group-wise fairness targets.",
       "promptPath": "shared/stages/stage-1.md"
     },
     {
       "id": "stage-2",
-      "label": "Stage 2",
-      "purpose": "Review test coverage and regression risk.",
+      "label": "Adaptive Progression Integrity",
+      "purpose": "Evaluate adaptive fairness, early-warning threshold validation, progression transparency, and pedagogical constraints.",
       "promptPath": "shared/stages/stage-2.md"
     },
     {
       "id": "stage-3",
-      "label": "Stage 3",
-      "purpose": "Review security and safety concerns.",
+      "label": "Protected Attribute Governance",
+      "purpose": "Audit protected-attribute and proxy handling, fairness mitigation validation, and separation between decisioning and fairness-evaluation paths.",
       "promptPath": "shared/stages/stage-3.md"
     },
     {
       "id": "stage-4",
-      "label": "Stage 4",
-      "purpose": "Review performance, scale, and resource usage concerns.",
+      "label": "Cultural and Accessibility Equity",
+      "purpose": "Review cultural inclusivity, non-exclusionary language, and accessibility support in learner-facing code and interfaces.",
       "promptPath": "shared/stages/stage-4.md"
     },
     {
       "id": "stage-5",
-      "label": "Stage 5",
-      "purpose": "Review maintainability, design, and developer experience concerns.",
+      "label": "Explainability and Human Oversight",
+      "purpose": "Evaluate AI output explainability, analytics claim validity, prediction-use alignment, contestability, and review safeguards.",
       "promptPath": "shared/stages/stage-5.md"
     },
     {
       "id": "stage-6",
-      "label": "Stage 6",
-      "purpose": "Review documentation, clarity, and communication quality.",
+      "label": "Privacy and Consent",
+      "purpose": "Assess learner privacy protection with consent checks, revocation handling, access controls, and compliance-oriented safeguards.",
       "promptPath": "shared/stages/stage-6.md"
     }
   ],
   "combineStage": {
     "id": "combine",
     "label": "Combine",
-    "purpose": "Merge the parallel analyses into a single CCR.md report.",
+    "purpose": "Consolidate all stage outputs into one complete, deduplicated, audit-ready JSON review object.",
     "promptPath": "architectures/parallel/combine.md"
   }
 }

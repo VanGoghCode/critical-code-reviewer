@@ -15,7 +15,7 @@ The repository also includes a local sandbox UI so you can test the action logic
 - Writes the final markdown report to `CCR.md` or a path you choose.
 - Exposes outputs for the report path, summary, risk level, finding count, and architecture ID.
 
-The prompt files are intentionally empty for now. The infrastructure is in place, and you can fill in the prompt bodies later without changing the orchestration code.
+Prompt files are part of this repository and are bundled with each action release tag.
 
 ## Where To Set Up Prompts
 
@@ -79,17 +79,20 @@ When the action runs on pull request events, use `actions/checkout@v4` with `fet
 ## Example Workflow
 
 ```yaml
-name: Review PR
+name: CCR Review
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
 
 jobs:
   review:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,7 +106,57 @@ jobs:
           model: gpt5_2
           architecture: parallel
           output-path: CCR.md
+
+      - name: Upload CCR report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccr-report-${{ github.run_id }}
+          path: CCR.md
+          if-no-files-found: ignore
 ```
+
+## Quick Setup In Customer Repo
+
+1. Publish and tag this action repo.
+
+```bash
+npm ci
+npm test
+npm run build
+git tag v1.0.1
+git push origin v1.0.1
+git tag -f v1
+git push origin -f v1
+```
+
+2. In the customer repository, add a secret named `CREATEAI_API_KEY`.
+3. Add the workflow shown above at `.github/workflows/ccr-review.yml`.
+4. Open a PR and verify `CCR.md` is generated in the workflow artifact.
+
+## Common Customizations
+
+Change these `with` inputs in the workflow:
+
+- `architecture`: `single-pass` | `iterative` | `parallel`
+- `model`: set your preferred model name
+- `base-url`: set your OpenAI-compatible endpoint
+- `output-path`: change review report output file
+- `include-globs` / `exclude-globs`: limit reviewed files
+- `max-files` / `max-context-chars`: control payload size
+- `temperature` / `request-timeout-ms`: tune model behavior and timeout
+
+## Prompt Source Options
+
+- Default: use prompts bundled inside this action release.
+- Customer-specific prompts: keep the same prompt/manifest structure in the customer repo and set an absolute prompt root.
+
+```yaml
+with:
+  prompt-root: ${{ github.workspace }}/.github/ccr-prompts
+```
+
+Relative `prompt-root` resolves inside the action package path. Use absolute path for customer repo prompt folders.
 
 ## Sandbox UI
 
@@ -162,5 +215,5 @@ npm run typecheck
 ## Notes
 
 - The action writes `CCR.md` only; it does not commit or comment on pull requests.
-- The prompt bodies are empty on purpose right now so you can fill in the architecture content after the repository scaffold is in place.
+- Update prompts in this repository and release a new tag when you want all consumer repositories to use new review behavior.
 - The sandbox and the action share the same engine so local tests mirror the publishable behavior.

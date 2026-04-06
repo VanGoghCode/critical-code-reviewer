@@ -1,13 +1,13 @@
 {
   "id": "single-pass",
   "label": "Single Prompt",
-  "description": "One end-to-end review call over the full change set.",
+  "description": "One end-to-end fairness, inclusion, transparency, and privacy audit over the full change set.",
   "mode": "single",
   "stages": [
     {
       "id": "review",
-      "label": "Review",
-      "purpose": "Perform one complete code review over the supplied files and context.",
+      "label": "Full Audit",
+      "purpose": "Run a complete six-dimension educational AI audit and produce a structured review report with findings, evidence, and remediation guidance.",
       "promptPath": "architectures/single-pass/prompt.md"
     }
   ]
