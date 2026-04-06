@@ -43,7 +43,7 @@ The action reads these prompts from the bundled action path in GitHub Actions, s
 | --- | --- | --- | --- |
 | `api-key` | Yes | - | API key for the ASU AIML review provider. |
 | `base-url` | No | `https://api-main.aiml.asu.edu/queryV2` | Base URL for the ASU AIML query endpoint. |
-| `model-provider` | No | - | Optional ASU model provider identifier included in query requests. |
+| `model-provider` | No | `asu` | ASU model provider identifier included in query requests. |
 | `model` | Yes | - | ASU model name to use for the review. |
 | `github-token` | No | - | GitHub token used to publish inline PR comments when enabled. |
 | `post-inline-comments` | No | `false` | Whether to publish short inline comments on changed lines in pull requests. |
@@ -120,7 +120,7 @@ jobs:
           api-key: ${{ secrets.ASU_API_KEY }}
           github-token: ${{ github.token }}
           base-url: https://api-main.aiml.asu.edu/queryV2
-          model-provider: provider-id
+          model-provider: asu
           model: gpt5_2
           architecture: parallel
           post-inline-comments: "true"
@@ -194,10 +194,10 @@ set CCR_PROVIDER=asu
 set ASU_API_KEY=...
 set ASU_MODEL=gpt5_2
 set ASU_BASE_URL=https://api-main.aiml.asu.edu/queryV2
-set ASU_MODEL_PROVIDER=provider-id
+set ASU_MODEL_PROVIDER=asu
 ```
 
-If your ASU tenant does not require an explicit model provider, omit `ASU_MODEL_PROVIDER`.
+`ASU_MODEL_PROVIDER` defaults to `asu` in the action and sandbox config. Override it only if your tenant requires a different provider value.
 
 The sandbox UI is at http://127.0.0.1:5173 and the backend API is on http://127.0.0.1:3030.
 

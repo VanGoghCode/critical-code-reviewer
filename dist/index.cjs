@@ -25638,6 +25638,7 @@ var import_github = __toESM(require_github(), 1);
 
 // src/core/api.ts
 var DEFAULT_ASU_BASE_URL = "https://api-main.aiml.asu.edu/queryV2";
+var DEFAULT_ASU_MODEL_PROVIDER = "asu";
 var DEFAULT_ASU_TEMPERATURE = 0.2;
 var DEFAULT_ASU_TIMEOUT_MS = 12e4;
 function normalizeOptionalString(value) {
@@ -25648,7 +25649,7 @@ function createAsuAimlProviderConfig(input) {
   return {
     apiKey: input.apiKey.trim(),
     baseUrl: input.baseUrl?.trim() || DEFAULT_ASU_BASE_URL,
-    modelProvider: normalizeOptionalString(input.modelProvider),
+    modelProvider: normalizeOptionalString(input.modelProvider) ?? DEFAULT_ASU_MODEL_PROVIDER,
     model: input.model.trim(),
     temperature: input.temperature ?? DEFAULT_ASU_TEMPERATURE,
     timeoutMs: input.timeoutMs ?? DEFAULT_ASU_TIMEOUT_MS
@@ -31143,7 +31144,7 @@ function getPullRequestHeadSha() {
 function buildProvider() {
   const apiKey = core.getInput("api-key", { required: true });
   const baseUrl = core.getInput("base-url") || DEFAULT_ASU_BASE_URL;
-  const modelProvider = readOptionalInput("model-provider");
+  const modelProvider = readOptionalInput("model-provider") ?? DEFAULT_ASU_MODEL_PROVIDER;
   const model = core.getInput("model", { required: true });
   const temperature = readFloatInput("temperature", 0.2);
   const timeoutMs = readIntegerInput("request-timeout-ms", 12e4);

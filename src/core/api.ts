@@ -17,6 +17,7 @@ export interface AsuAimlProviderInput {
 }
 
 export const DEFAULT_ASU_BASE_URL = "https://api-main.aiml.asu.edu/queryV2";
+export const DEFAULT_ASU_MODEL_PROVIDER = "asu";
 export const DEFAULT_ASU_TEMPERATURE = 0.2;
 export const DEFAULT_ASU_TIMEOUT_MS = 120000;
 
@@ -59,7 +60,9 @@ export function createAsuAimlProviderConfig(
   return {
     apiKey: input.apiKey.trim(),
     baseUrl: input.baseUrl?.trim() || DEFAULT_ASU_BASE_URL,
-    modelProvider: normalizeOptionalString(input.modelProvider),
+    modelProvider:
+      normalizeOptionalString(input.modelProvider) ??
+      DEFAULT_ASU_MODEL_PROVIDER,
     model: input.model.trim(),
     temperature: input.temperature ?? DEFAULT_ASU_TEMPERATURE,
     timeoutMs: input.timeoutMs ?? DEFAULT_ASU_TIMEOUT_MS,
@@ -80,7 +83,7 @@ export function readAsuAimlProviderConfig(
   return createAsuAimlProviderConfig({
     apiKey,
     baseUrl: env.ASU_BASE_URL,
-    modelProvider: env.ASU_MODEL_PROVIDER,
+    modelProvider: env.ASU_MODEL_PROVIDER ?? DEFAULT_ASU_MODEL_PROVIDER,
     model,
     temperature: readNumberEnv(env.ASU_TEMPERATURE, DEFAULT_ASU_TEMPERATURE),
     timeoutMs: readIntegerEnv(env.ASU_TIMEOUT_MS, DEFAULT_ASU_TIMEOUT_MS),

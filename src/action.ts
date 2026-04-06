@@ -3,6 +3,7 @@ import * as core from "@actions/core";
 import { context } from "@actions/github";
 import {
   DEFAULT_ASU_BASE_URL,
+  DEFAULT_ASU_MODEL_PROVIDER,
   createAsuAimlProviderConfig,
 } from "./core/api.js";
 import { runReviewArchitecture } from "./core/engine.js";
@@ -104,7 +105,8 @@ function getPullRequestHeadSha(): string | undefined {
 function buildProvider() {
   const apiKey = core.getInput("api-key", { required: true });
   const baseUrl = core.getInput("base-url") || DEFAULT_ASU_BASE_URL;
-  const modelProvider = readOptionalInput("model-provider");
+  const modelProvider =
+    readOptionalInput("model-provider") ?? DEFAULT_ASU_MODEL_PROVIDER;
   const model = core.getInput("model", { required: true });
   const temperature = readFloatInput("temperature", 0.2);
   const timeoutMs = readIntegerInput("request-timeout-ms", 120000);

@@ -10,8 +10,9 @@ inputs:
     required: false
     default: https://api-main.aiml.asu.edu/queryV2
   model-provider:
-    description: Optional ASU model provider identifier to send with query requests.
+    description: ASU model provider identifier to send with query requests.
     required: false
+    default: asu
   model:
     description: ASU model name to use for the review.
     required: true
