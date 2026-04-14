@@ -10,49 +10,29 @@ permissions:
 
 jobs:
   ccr-review:
-    name: CCR Ethical Code Review
+    name: CCR Review Action
     runs-on: ubuntu-latest
 
+    # Fork PRs cannot access repo secrets (including ASU_API_KEY).
     if: ${{ github.event.pull_request.draft == false && github.event.pull_request.head.repo.fork == false }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Run CCR review action
+        uses: ./
         with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run CCR Review
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
-
-          ASU_API_KEY: ${{ secrets.ASU_API_KEY }}
-          ASU_MODEL: gpt5_2
-          ASU_BASE_URL: https://api-main.aiml.asu.edu/queryV2
-          ASU_MODEL_PROVIDER: asu
-
-          # Architecture: single-pass | iterative | parallel
-          ARCHITECTURE: parallel
-
-          POST_INLINE_COMMENTS: "true"
-          INLINE_COMMENT_LIMIT: "10"
-          MAX_CONTEXT_CHARS: "12000"
-
-        run: |
-          python scripts/ccr_reviewer.py
+          api-key: ${{ secrets.ASU_API_KEY }}
+          github-token: ${{ github.token }}
+          model: gpt5_2
+          architecture: parallel
+          post-inline-comments: "true"
+          inline-comment-limit: "10"
+          inline-comment-mode: file-coverage
+          output-path: CCR.md
 
       - name: Upload CCR markdown report
         if: ${{ always() }}

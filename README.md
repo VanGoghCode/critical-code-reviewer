@@ -2,7 +2,7 @@
 
 CCR Review is a reusable GitHub Action that reviews a PR-style change set, runs one of three configurable prompt architectures, and writes the resulting report to `CCR.md` in the repository root.
 
-The repository also includes a local sandbox UI so you can test the action logic in the same repo before wiring it into a real project. The sandbox is development-only; the published action surface is still the Node 20 action defined in `action.yml`.
+The published action surface is the Node 24 action defined in `action.yml`.
 
 ## What It Does
 
@@ -35,7 +35,7 @@ The action reads these prompts from the bundled action path in GitHub Actions, s
 
 - You want a reusable review action with a publishable GitHub Action package.
 - You want to compare multiple prompt architectures against the same sample change set.
-- You want a local UI that lets you change file inputs, context, and architecture before the action is wired into a live repository.
+- You want deterministic PR review automation in CI with configurable prompt architectures.
 
 ## Inputs
 
@@ -113,7 +113,7 @@ jobs:
 
     steps:
       - name: Run CCR review
-        uses: your-org/your-repo@v1
+        uses: VanGoghCode/critical-code-reviewer@main
         with:
           api-key: ${{ secrets.ASU_API_KEY }}
           github-token: ${{ github.token }}
@@ -138,9 +138,11 @@ jobs:
 ## Quick Setup In Any Repository
 
 1. Add the workflow shown above at `.github/workflows/ccr-review.yml`.
-2. Set `uses` to the published action tag, for example `your-org/your-repo@v1`.
+2. Set `uses` to this action ref, for example `VanGoghCode/critical-code-reviewer@main`.
 3. Add a repository secret named `ASU_API_KEY`.
 4. Open a PR and verify `CCR.md` is generated in the workflow artifact.
+
+For production stability, pin to a release tag (for example `@v1`) or a commit SHA once published.
 
 ## Common Customizations
 
@@ -170,39 +172,6 @@ with:
 
 Relative `prompt-root` resolves inside the action package path. Use absolute path for repository-local prompt folders.
 
-## Sandbox UI
-
-The sandbox lives in the same repo and gives you a local review harness before you publish or integrate the action.
-
-- `F1`: add or remove PR-like file sets with file name, file path, and sample code.
-- `F2`: add optional metadata or context.
-- `F3`: switch the architecture for the whole run.
-- `F4`: inspect the exact `CCR.md` markdown output.
-- `F5`: follow backend logs as the review runs.
-
-Run it locally with:
-
-```bash
-npm ci
-npm run dev
-```
-
-The sandbox backend supports ASU provider mode. Set:
-
-```bash
-set CCR_PROVIDER=asu
-set ASU_API_KEY=...
-set ASU_MODEL=gpt5_2
-set ASU_BASE_URL=https://api-main.aiml.asu.edu/queryV2
-set ASU_MODEL_PROVIDER=asu
-```
-
-`ASU_MODEL_PROVIDER` defaults to `asu` in the action and sandbox config. Override it only if your tenant requires a different provider value.
-
-The sandbox UI is at http://127.0.0.1:5173 and the backend API is on http://127.0.0.1:3030.
-
-If you move the prompt folder, set prompt-root in the action inputs to the new folder name or absolute path. The default prompt-root already points at the action’s bundled prompts.
-
 ## Build And Test
 
 ```bash
@@ -225,4 +194,3 @@ npm run typecheck
 - Inline PR comments are published as pull request review comments and support single-line or block ranges when findings include `line` and `endLine`.
 - Pull request mode deduplicates against existing inline review comments to avoid reposting identical comments on every synchronize event.
 - Update prompts in this repository and release a new tag when you want all repositories using this action to get new review behavior.
-- The sandbox and the action share the same engine so local tests mirror the publishable behavior.
