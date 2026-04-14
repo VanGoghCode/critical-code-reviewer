@@ -24,25 +24,31 @@ You will receive:
 - If recommendations overlap, unify them into one non-redundant list.
 
 [OUTPUT FORMAT]
-Return ONLY a valid JSON array. No markdown fences, no prose before or after.
+Return a single JSON object. No markdown fences, no prose before or after.
 
-Each element must have exactly these fields:
-- "path": string — file path relative to repo root, must match the file path in the diff exactly
+The JSON object must have exactly these keys:
+- "summary": string — overall review summary
+- "riskLevel": "low" | "medium" | "high"
+- "findings": array — one entry per unique issue found across all stages
+- "todos": array of strings — follow-up action items
+- "notes": array of strings — additional context
+
+Each element in "findings" must have exactly these fields:
+- "severity": "low" | "medium" | "high"
+- "title": string — short label for the issue
+- "detail": string — 1-3 sentence explanation of the issue, constructive and actionable
+- "file": string — file path relative to repo root, must match the file path in the diff exactly
 - "line": integer — line number in the NEW file, must point to an added or changed line
-- "body": string — markdown-formatted comment explaining the issue, constructive and actionable
-- "severity": string — one of "info", "warning", or "concern"
-
-Severity guide:
-- "info": minor suggestion or improvement, not a blocker
-- "warning": potential issue that should be addressed
-- "concern": significant issue that could cause harm or should block merge
+- "endLine": integer — optional, last line if the finding spans a block
+- "recommendation": string — optional, concrete fix
 
 Rules:
-- If no issues found across all stages, return exactly: []
+- If no issues found across all stages, return findings as an empty array []
 - Each finding must map to a real changed line in the diff
 - Do not fabricate line numbers or file paths
-- Keep body concise but informative (2-4 sentences)
-- When combining overlapping findings from multiple stages, merge their evidence into a single body
+- Every finding MUST include file and line — do not omit them
+- Keep detail and recommendation concise (2-4 sentences)
+- When combining overlapping findings from multiple stages, merge their evidence into a single finding
 
 [CRITICAL COMPLETENESS RULE]
 Before producing the final JSON, verify that every finding, risk, evidence point, and remediation step from all input stages is either:

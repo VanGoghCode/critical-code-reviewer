@@ -37,6 +37,29 @@ function extractJsonCandidate(text: string): string {
     return fencedMatch[1].trim();
   }
 
+  // Try to find a JSON object containing "findings" — handles cases where
+  // the LLM wraps JSON in explanatory prose or prefixes it with text.
+  // Use "findings" as a beacon, then walk outward to the nearest enclosing
+  // balanced braces to get the full JSON object.
+  const findingsPos = text.indexOf('"findings"');
+  if (findingsPos >= 0) {
+    const searchStart = Math.max(0, findingsPos - 500);
+    const firstBrace = text.indexOf("{", searchStart);
+    if (firstBrace >= 0 && firstBrace <= findingsPos) {
+      let depth = 0;
+      for (let i = firstBrace; i < text.length; i += 1) {
+        if (text[i] === "{") {
+          depth += 1;
+        } else if (text[i] === "}") {
+          depth -= 1;
+          if (depth === 0) {
+            return text.slice(firstBrace, i + 1).trim();
+          }
+        }
+      }
+    }
+  }
+
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
   if (firstBrace >= 0 && lastBrace > firstBrace) {

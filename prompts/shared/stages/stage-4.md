@@ -31,11 +31,12 @@ Assess only the criteria in this dimension:
 Evaluate the provided UI, code, product flow, or change request.
 
 [OUTPUT REQUIREMENTS]
-- For each criterion, state: Pass / Risk / Fail
-- Identify the excluded user groups or access barriers
+- You MUST return valid JSON matching the schema specified in the system instructions
+- For each criterion that receives Risk or Fail, add one entry to the findings array
+- Include the specific file path (matching the diff exactly) and line number for every finding
+- Identify the excluded user groups or access barriers in the detail field
 - Tie the issue to concrete UI/code elements
-- Recommend inclusive redesign or accessibility fixes
-- Keep the response practical and user-centered
+- Recommend inclusive redesign or accessibility fixes in the recommendation field
 
 [STATE PRESERVATION REQUIREMENTS]
 - Treat all previous stage outputs as mandatory persistent context. Preserve every prior finding, rationale, and recommendation so later stages retain a complete audit trail without loss of detail.

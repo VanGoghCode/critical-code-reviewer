@@ -295,43 +295,42 @@ Processing learner data without verifying consent, or continuing after consent i
 
 ## Output Format
 
-Produce your review report in five sections.
+Return a single JSON object — no Markdown fences, no surrounding prose.
 
-### Section 1 PR Summary
+### JSON Schema
 
-Brief description of what the PR does and which learnerfacing systems or decisions it affects.
+```json
+{
+  "summary": "Brief description of what the PR does and which learner-facing systems it affects.",
+  "riskLevel": "low | medium | high",
+  "findings": [
+    {
+      "severity": "low | medium | high",
+      "title": "Short label for the issue",
+      "detail": "1-3 sentence explanation of the risk and which learners are affected",
+      "file": "exact file path from the diff (required)",
+      "line": 42,
+      "endLine": 45,
+      "recommendation": "Concrete, actionable fix"
+    }
+  ],
+  "todos": ["Follow-up action items for the PR author"],
+  "notes": ["Any additional context, edge cases, or questions"]
+}
+```
 
-### Section 2 Criteria Reviewed
+### Field Rules
 
-| Icon | Label | Meaning |
-|---|---|---|
-| ✅ | PASS | No issue found. Include a brief reason. |
-| ⚠️ | WARNING | Potential issue; needs attention but not a blocker. |
-| 🔴 | FLAG | Issue found must be resolved before merge. |
-| ⬜ | NOT APPLICABLE | Does not apply to this PR. Include a brief reason. |
-
-List every criterion checked with one of the above verdicts.
-
-### Section 3 Detailed Findings
-
-For every WARNING or FLAG, provide:
-- Criterion name
-- Severity: WARNING or FLAG
-- Evidence: specific file, line, function, config key, schema field, or test
-- Why it matters: plainlanguage explanation of the risk and which learners are affected
-- What to fix: concrete, actionable recommendation
-
-### Section 4 Overall Verdict
-
-| Icon | Decision | Meaning |
-|---|---|---|
-| ✅ | APPROVE | No flags or warnings found. |
-| ⚠️ | APPROVE WITH CONDITIONS | Warnings present; no blockers. |
-| 🔴 | REQUEST CHANGES | One or more flags must be resolved before merge. |
-
-### Section 5 Reviewer Note
-
-Any additional context, edge cases, or followup questions for the PR author.
+- `summary`: What the PR does and which learner-facing systems it affects.
+- `riskLevel`: `low` = no warnings or flags, `medium` = warnings present, `high` = one or more flags must be resolved before merge.
+- `findings`: One entry per WARNING or FLAG from the criteria review. Each finding **MUST** include:
+  - `file`: Exact path from the diff input (required — never omit).
+  - `line`: Integer line number in the new file, pointing to an added or changed line (required — never omit).
+  - `endLine`: Optional — use when a finding spans a block of lines.
+  - `severity`: Map WARNING → `medium`, FLAG → `high`, minor suggestions → `low`.
+  - `recommendation`: Concrete fix or guardrail.
+- `todos`: Action items for the PR author.
+- `notes`: Additional context, edge cases, or follow-up questions.
 
 ---
 

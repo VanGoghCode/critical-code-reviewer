@@ -31,11 +31,11 @@ Assess only the criteria in this dimension:
 Evaluate the provided system, dataset, model, or change request.
 
 [OUTPUT REQUIREMENTS]
-- For each criterion, state: Pass / Risk / Fail
-- Explain the evidence behind the judgment
-- List the likely fairness consequences
-- Recommend concrete remediation steps
-- Keep the response structured and audit-ready
+- You MUST return valid JSON matching the schema specified in the system instructions
+- For each criterion that receives Risk or Fail, add one entry to the findings array
+- Include the specific file path (matching the diff exactly) and line number for every finding
+- Explain the evidence behind the judgment in the detail field
+- List the likely fairness consequences in the detail or recommendation field
 - Use concise technical language
 
 [STATE PRESERVATION REQUIREMENTS]

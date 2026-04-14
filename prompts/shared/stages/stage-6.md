@@ -21,11 +21,12 @@ Assess only the criteria in this dimension:
 Evaluate the provided data flow, feature, UI, backend logic, or change request.
 
 [OUTPUT REQUIREMENTS]
-- State Pass / Risk / Fail
-- Identify where consent enforcement is missing or weak
+- You MUST return valid JSON matching the schema specified in the system instructions
+- For each criterion that receives Risk or Fail, add one entry to the findings array
+- Include the specific file path (matching the diff exactly) and line number for every finding
+- Identify where consent enforcement is missing or weak in the detail field
 - Note any revocation, access-control, or test gaps
-- Recommend concrete privacy safeguards
-- Keep the response concise and compliance-oriented
+- Recommend concrete privacy safeguards in the recommendation field
 
 [STATE PRESERVATION REQUIREMENTS]
 - Treat all previous stage outputs as mandatory persistent context. This final stage must retain the full audit history with no loss of prior details, and any correction to earlier material must be explicitly labeled and justified.

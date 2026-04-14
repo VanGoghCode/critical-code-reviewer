@@ -36,11 +36,12 @@ Assess only the criteria in this dimension:
 Evaluate the provided learning system, adaptive logic, or change request.
 
 [OUTPUT REQUIREMENTS]
-- For each criterion, state: Pass / Risk / Fail
-- Explain educational impact and fairness risk
+- You MUST return valid JSON matching the schema specified in the system instructions
+- For each criterion that receives Risk or Fail, add one entry to the findings array
+- Include the specific file path (matching the diff exactly) and line number for every finding
+- Explain educational impact and fairness risk in the detail field
 - Identify whether the issue affects progression, support, or intervention quality
-- Provide specific fixes or guardrails
-- Keep the response structured and implementation-oriented
+- Provide specific fixes or guardrails in the recommendation field
 
 [STATE PRESERVATION REQUIREMENTS]
 - Treat all previous stage outputs as mandatory persistent context. Do not omit, compress away, contradict, or lose any prior evidence, judgments, consequences, or remediation details unless explicitly correcting them and clearly explaining why.
