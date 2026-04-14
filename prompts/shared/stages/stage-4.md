@@ -30,16 +30,6 @@ Assess only the criteria in this dimension:
 [INPUT]
 Evaluate the provided UI, code, product flow, or change request.
 
-[OUTPUT REQUIREMENTS]
-- You MUST return valid JSON matching the schema specified in the system instructions
-- For each criterion that receives Risk or Fail, add one entry to the findings array
-- Include the specific file path (matching the diff exactly) and line number for every finding
-- In the detail field, write 1-2 short, conversational sentences about which learners might be excluded or what barriers exist — be polite, curious, helpful
-- Point to the specific UI/code elements involved
-- In the recommendation field, phrase suggestions as questions or friendly observations
-- Never include severity prefixes like [HIGH], [MEDIUM], or [LOW] in the detail or recommendation text
-- Avoid robotic commands — no "must", "should", "ensure" as imperatives
-
 [STATE PRESERVATION REQUIREMENTS]
 - Treat all previous stage outputs as mandatory persistent context. Preserve every prior finding, rationale, and recommendation so later stages retain a complete audit trail without loss of detail.
 - Begin the response with a clearly labeled section titled "Cumulative Context" that includes all prior stage outputs in full or faithfully integrated structured form before presenting this stage’s analysis.

@@ -439,6 +439,47 @@ def load_framework_md() -> str:
     return ""
 
 
+def _load_guard(filename: str) -> str:
+    """Load a guard file from prompts/shared/."""
+    root = _find_repo_root()
+    path = root / "prompts" / "shared" / filename
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return ""
+
+
+def _wrap_with_guards(
+    stage_prompt: str,
+    manifest_mode: str,
+    is_combine: bool = False,
+) -> str:
+    """Wrap stage prompt with auto-injected guard prefix and suffix.
+
+    Guard files live in prompts/shared/ and contain immutable output-format
+    and tone rules so the user can freely edit stage prompts without breaking
+    core behaviour.
+    """
+    prefix = _load_guard("guard-prefix.md")
+
+    if is_combine:
+        suffix = _load_guard("guard-suffix-combine.md")
+    elif manifest_mode == "single":
+        suffix = _load_guard("guard-suffix-single.md")
+    else:
+        suffix = _load_guard("guard-suffix-stages.md")
+
+    parts: list[str] = []
+    if prefix.strip():
+        parts.append(prefix.strip())
+        parts.append("\n\n---\n")
+    parts.append(stage_prompt.strip())
+    if suffix.strip():
+        parts.append("\n\n---\n")
+        parts.append(suffix.strip())
+
+    return "\n".join(parts)
+
+
 # ---------------------------------------------------------------------------
 # Architecture Engine
 # ---------------------------------------------------------------------------
@@ -477,6 +518,7 @@ def run_single(
         print(f"  Stage: {manifest.stages[0].label} (manifest prompt)")
     else:
         print(f"  Stage: Full Audit (.github/ccr-framework.md)")
+    stage_prompt = _wrap_with_guards(stage_prompt, manifest.mode)
     return _execute_stage(config, manifest.stages[0], stage_prompt, files, [], max_context_chars)
 
 
@@ -491,6 +533,7 @@ def run_sequential(
     previous: list[str] = []
     for i, stage in enumerate(manifest.stages):
         stage_prompt = load_stage_prompt(stage, prompt_root)
+        stage_prompt = _wrap_with_guards(stage_prompt, manifest.mode)
         print(f"  Stage {i + 1}/{len(manifest.stages)}: {stage.label}")
         try:
             output = _execute_stage(config, stage, stage_prompt, files, previous, max_context_chars)
@@ -513,6 +556,7 @@ def run_parallel(
 
     def _run_stage(index: int, stage: StageManifest) -> tuple[int, str]:
         stage_prompt = load_stage_prompt(stage, prompt_root)
+        stage_prompt = _wrap_with_guards(stage_prompt, manifest.mode)
         print(f"  Stage {index + 1}/{len(manifest.stages)}: {stage.label}")
         try:
             output = _execute_stage(config, stage, stage_prompt, files, [], max_context_chars)
@@ -538,6 +582,7 @@ def run_parallel(
 
     ordered_outputs = [stage_outputs[i] for i in sorted(stage_outputs.keys())]
     combine_prompt = load_stage_prompt(manifest.combine_stage, prompt_root)
+    combine_prompt = _wrap_with_guards(combine_prompt, manifest.mode, is_combine=True)
     print(f"  Combine stage: {manifest.combine_stage.label}")
     return _execute_stage(
         config, manifest.combine_stage, combine_prompt, files, ordered_outputs, max_context_chars

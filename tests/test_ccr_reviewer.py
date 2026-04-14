@@ -586,3 +586,121 @@ class TestReviewBody:
         assert "I noticed" in ccr.OUTPUT_FORMAT_PROMPT
         # Should NOT contain the old bold-label style
         assert "**Warning**" not in ccr.OUTPUT_FORMAT_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Guard file injection tests
+# ---------------------------------------------------------------------------
+
+
+class TestGuardFiles:
+    """Verify guard files exist, load correctly, and are injected properly."""
+
+    def _guard_dir(self) -> Path:
+        return Path(__file__).resolve().parent.parent / "prompts" / "shared"
+
+    def test_guard_prefix_exists(self) -> None:
+        assert (self._guard_dir() / "guard-prefix.md").exists()
+
+    def test_guard_suffix_single_exists(self) -> None:
+        assert (self._guard_dir() / "guard-suffix-single.md").exists()
+
+    def test_guard_suffix_stages_exists(self) -> None:
+        assert (self._guard_dir() / "guard-suffix-stages.md").exists()
+
+    def test_guard_suffix_combine_exists(self) -> None:
+        assert (self._guard_dir() / "guard-suffix-combine.md").exists()
+
+    def test_load_guard_returns_content(self) -> None:
+        content = ccr._load_guard("guard-prefix.md")
+        assert "polite" in content.lower()
+        assert "curious" in content.lower()
+        assert "[HIGH]" in content  # explicitly banned
+
+    def test_load_guard_missing_file_returns_empty(self) -> None:
+        content = ccr._load_guard("nonexistent-guard.md")
+        assert content == ""
+
+    def test_wrap_with_guards_single_mode(self) -> None:
+        prompt = "My custom review criteria"
+        wrapped = ccr._wrap_with_guards(prompt, "single")
+        # Must contain the prefix (tone rules)
+        assert "polite" in wrapped.lower()
+        # Must contain the user prompt
+        assert "My custom review criteria" in wrapped
+        # Must contain the suffix (output format)
+        assert "JSON Schema" in wrapped or "json" in wrapped.lower()
+
+    def test_wrap_with_guards_parallel_stage(self) -> None:
+        prompt = "[ROLE]\nYou are a fairness expert."
+        wrapped = ccr._wrap_with_guards(prompt, "parallel")
+        # Must contain prefix
+        assert "polite" in wrapped.lower()
+        # Must contain user prompt
+        assert "fairness expert" in wrapped
+        # Must contain stage suffix
+        assert "OUTPUT REQUIREMENTS" in wrapped or "findings" in wrapped
+
+    def test_wrap_with_guards_combine_stage(self) -> None:
+        prompt = "[CONSOLIDATION RULES]\n- Merge everything"
+        wrapped = ccr._wrap_with_guards(prompt, "parallel", is_combine=True)
+        # Must contain prefix
+        assert "polite" in wrapped.lower()
+        # Must contain user prompt
+        assert "Merge everything" in wrapped
+        # Must contain combine suffix
+        assert "CRITICAL COMPLETENESS RULE" in wrapped
+
+    def test_wrap_with_guards_order(self) -> None:
+        """Prefix must come before the prompt, suffix after."""
+        prompt = "MIDDLE_MARKER"
+        wrapped = ccr._wrap_with_guards(prompt, "single")
+        prefix_pos = wrapped.find("Behavior Rules")
+        prompt_pos = wrapped.find("MIDDLE_MARKER")
+        suffix_pos = wrapped.find("Output Format")
+        assert prefix_pos < prompt_pos < suffix_pos
+
+    def test_prompt_md_has_no_output_format(self) -> None:
+        """single-pass prompt.md should NOT contain output format (moved to guard)."""
+        prompt_path = (
+            Path(__file__).resolve().parent.parent
+            / "prompts"
+            / "architectures"
+            / "single-pass"
+            / "prompt.md"
+        )
+        if not prompt_path.exists():
+            pytest.skip("single-pass prompt.md not found")
+        content = prompt_path.read_text(encoding="utf-8")
+        assert "## Output Format" not in content
+        assert "## Review Principles" not in content
+
+    def test_stage_prompts_have_no_output_requirements(self) -> None:
+        """Stage prompts should NOT contain OUTPUT REQUIREMENTS (moved to guard)."""
+        for i in range(1, 7):
+            stage_path = (
+                Path(__file__).resolve().parent.parent
+                / "prompts"
+                / "shared"
+                / "stages"
+                / f"stage-{i}.md"
+            )
+            if not stage_path.exists():
+                continue
+            content = stage_path.read_text(encoding="utf-8")
+            assert "[OUTPUT REQUIREMENTS]" not in content
+
+    def test_combine_md_has_no_output_format(self) -> None:
+        """combine.md should NOT contain OUTPUT FORMAT (moved to guard)."""
+        combine_path = (
+            Path(__file__).resolve().parent.parent
+            / "prompts"
+            / "architectures"
+            / "parallel"
+            / "combine.md"
+        )
+        if not combine_path.exists():
+            pytest.skip("combine.md not found")
+        content = combine_path.read_text(encoding="utf-8")
+        assert "[OUTPUT FORMAT]" not in content
+        assert "[CRITICAL COMPLETENESS RULE]" not in content

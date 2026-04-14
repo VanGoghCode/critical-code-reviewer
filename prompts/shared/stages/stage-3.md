@@ -30,16 +30,6 @@ Assess only the criteria in this dimension:
 [INPUT]
 Evaluate the provided decision logic, policy, model, data pipeline, or change request.
 
-[OUTPUT REQUIREMENTS]
-- You MUST return valid JSON matching the schema specified in the system instructions
-- For each criterion that receives Risk or Fail, add one entry to the findings array
-- Include the specific file path (matching the diff exactly) and line number for every finding
-- In the detail field, write 1-2 short, conversational sentences about how protected attributes or proxies affect treatment — be polite, curious, helpful
-- Note whether mitigation evidence appears validated
-- In the recommendation field, phrase suggestions as questions or friendly observations
-- Never include severity prefixes like [HIGH], [MEDIUM], or [LOW] in the detail or recommendation text
-- Avoid robotic commands — no "must", "should", "ensure" as imperatives
-
 [STATE PRESERVATION REQUIREMENTS]
 - Treat all previous stage outputs as mandatory persistent context. No prior stage detail may be dropped, summarized away beyond recoverability, or overwritten without explicit justification and traceable correction.
 - Begin the response with a clearly labeled section titled "Cumulative Context" containing all prior stage outputs in preserved structured form, then extend that record with this stage’s analysis.

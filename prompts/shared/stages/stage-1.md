@@ -30,15 +30,6 @@ Assess only the criteria in this dimension:
 [INPUT]
 Evaluate the provided system, dataset, model, or change request.
 
-[OUTPUT REQUIREMENTS]
-- You MUST return valid JSON matching the schema specified in the system instructions
-- For each criterion that receives Risk or Fail, add one entry to the findings array
-- Include the specific file path (matching the diff exactly) and line number for every finding
-- In the detail field, write 1-2 short, conversational sentences about what you noticed and why it matters — be polite, curious, helpful
-- In the recommendation field, phrase suggestions as questions or friendly observations (e.g., "Would it make sense to add...?")
-- Never include severity prefixes like [HIGH], [MEDIUM], or [LOW] in the detail or recommendation text
-- Avoid robotic commands — no "must", "should", "ensure" as imperatives
-
 [STATE PRESERVATION REQUIREMENTS]
 - This is the first stage, so create a complete baseline record that will be passed to later stages. Preserve all material details, evidence, judgments, consequences, and remediation steps in a structured form so nothing is lost downstream.
 - Begin the response with a clearly labeled section titled "Cumulative Context" containing the full current stage output in a durable, reusable format for subsequent stages.
