@@ -12,7 +12,7 @@ inputs:
   model-provider:
     description: ASU model provider identifier to send with query requests.
     required: false
-    default: asu
+    default: openai
   model:
     description: ASU model name to use for the review.
     required: true

@@ -88,7 +88,7 @@ Relative `prompt-root` resolves inside the action package path. Use an absolute 
 | --- | --- | --- | --- |
 | `api-key` | Yes | — | API key for the ASU AIML provider. |
 | `base-url` | No | `https://api-main.aiml.asu.edu/queryV2` | ASU AIML query endpoint. |
-| `model-provider` | No | `asu` | ASU model provider identifier. |
+| `model-provider` | No | `openai` | ASU model provider identifier. |
 | `model` | Yes | — | ASU model name (e.g. `gpt5_2`). |
 | `github-token` | No | — | Token for inline PR comments. |
 | `post-inline-comments` | No | `false` | Post inline comments on changed lines. |
@@ -223,8 +223,8 @@ jobs:
           # base-url: https://api-main-beta.aiml.asu.edu/queryV2
 
           # ASU provider identifier sent with each request.
-          # Default: asu
-          # model-provider: asu
+          # Default: openai
+          # model-provider: openai
 
           # ── Architecture ──────────────────────────────────────────
           # single-pass : one LLM call, fastest, good for small PRs

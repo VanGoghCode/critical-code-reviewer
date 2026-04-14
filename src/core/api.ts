@@ -17,7 +17,7 @@ export interface AsuAimlProviderInput {
 }
 
 export const DEFAULT_ASU_BASE_URL = "https://api-main.aiml.asu.edu/queryV2";
-export const DEFAULT_ASU_MODEL_PROVIDER = "asu";
+export const DEFAULT_ASU_MODEL_PROVIDER = "openai";
 export const DEFAULT_ASU_TEMPERATURE = 0.2;
 export const DEFAULT_ASU_TIMEOUT_MS = 120000;
 

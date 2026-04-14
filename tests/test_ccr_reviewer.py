@@ -373,7 +373,7 @@ class TestAsuProvider:
             api_key="key123",
             base_url="https://api.example.com/query",
             model="gpt5_2",
-            model_provider="asu",
+            model_provider="openai",
             temperature=0.2,
             timeout_ms=120000,
         )
@@ -389,7 +389,7 @@ class TestAsuProvider:
         assert body["model_name"] == "gpt5_2"
         assert body["model_params"]["temperature"] == 0.2
         assert body["model_params"]["system_prompt"] == "system prompt"
-        assert body["model_provider"] == "asu"
+        assert body["model_provider"] == "openai"
 
 
 # ---------------------------------------------------------------------------
