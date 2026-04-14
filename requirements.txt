@@ -1,0 +1,2 @@
+# HTTP client for GitHub API and ASU AIML provider
+requests>=2.31.0

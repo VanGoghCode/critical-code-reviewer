@@ -1,13 +1,33 @@
-node_modules/
-sandbox/dist/
-coverage/
-.vite/
-*.log
-*.tsbuildinfo
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.python-version
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
 .env
 .env.*
 !.env.example
+
+# OS
 .DS_Store
+Thumbs.db
 
 # Sensitive files
 *.pem
@@ -25,4 +45,15 @@ id_dsa
 id_ecdsa
 id_ed25519
 secrets/
-.vercel
+
+# Generated
+CCR.md
+graphify-out/
+.graphify_*
+
+# Local Claude and workspace context
+CLAUDE.md
+.claude/
+Context/
+*.log
+Context/

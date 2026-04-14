@@ -1,4 +1,4 @@
-name: CCR Review Sample
+name: CCR Review
 
 on:
   pull_request:
@@ -10,33 +10,49 @@ permissions:
 
 jobs:
   ccr-review:
-    if: ${{ github.event.pull_request.draft == false && github.event.pull_request.head.repo.fork == false }}
+    name: CCR Ethical Code Review
     runs-on: ubuntu-latest
 
+    if: ${{ github.event.pull_request.draft == false && github.event.pull_request.head.repo.fork == false }}
+
     steps:
-      - name: Run CCR review action
-        uses: VanGoghCode/ccr-test@v1
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          api-key: ${{ secrets.ASU_API_KEY }}
-          base-url: https://api-main.aiml.asu.edu/queryV2
-          model: gpt5_2
-          model-provider: asu
-          # Architecture guide:
-          # - single-pass: fastest + lowest cost; best for small PRs.
-          # - iterative: deeper step-by-step analysis; best for medium PRs.
-          # - parallel: broadest coverage + best for high-risk/large PRs.
-          architecture: parallel
-          post-inline-comments: "true"
-          inline-comment-limit: "10"
-          inline-comment-mode: file-coverage
-          github-token: ${{ github.token }}
-          output-path: CCR.md
-          include-globs: "**/*"
-          exclude-globs: "node_modules/**,dist/**,coverage/**,.git/**"
-          max-files: "25"
-          max-context-chars: "12000"
-          temperature: "0.2"
-          request-timeout-ms: "120000"
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run CCR Review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+
+          ASU_API_KEY: ${{ secrets.ASU_API_KEY }}
+          ASU_MODEL: gpt5_2
+          ASU_BASE_URL: https://api-main.aiml.asu.edu/queryV2
+          ASU_MODEL_PROVIDER: asu
+
+          # Architecture: single-pass | iterative | parallel
+          ARCHITECTURE: parallel
+
+          POST_INLINE_COMMENTS: "true"
+          INLINE_COMMENT_LIMIT: "10"
+          MAX_CONTEXT_CHARS: "12000"
+
+        run: |
+          python scripts/ccr_reviewer.py
 
       - name: Upload CCR markdown report
         if: ${{ always() }}
