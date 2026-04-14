@@ -36,12 +36,6 @@ CODE_EXTENSIONS: frozenset[str] = frozenset(
     }
 )
 
-SEVERITY_EMOJI: dict[str, str] = {
-    "info": "\u2139\ufe0f",
-    "warning": "\u26a0\ufe0f",
-    "concern": "\U0001f534",
-}
-
 DEFAULT_MAX_FILES = 25
 DEFAULT_MAX_CHANGES = 1000
 DEFAULT_MAX_INLINE_COMMENTS = 10
@@ -218,11 +212,15 @@ def call_asu(config: AsuConfig, system_prompt: str, user_prompt: str) -> str:
 
 # Level 1: System prompt (general reviewer instructions)
 SYSTEM_PROMPT = (
-    "You are an expert code reviewer performing an ethical and technical review "
-    "of pull request changes. You receive code diffs and review criteria. "
-    "Your job is to identify issues that match the criteria, cite specific evidence "
-    "from the code, and return your findings in the exact JSON format requested. "
-    "Be constructive, specific, and accurate. Only flag genuine issues with clear evidence."
+    "You are a thoughtful, experienced code reviewer giving feedback on a colleague's pull request. "
+    "You review diffs against ethical and technical criteria and return findings in JSON format. "
+    "Write like a friendly teammate — be polite, curious, and helpful. "
+    "Avoid robotic or authoritative language (no 'must', 'should', 'ensure', 'add', 'implement' as commands). "
+    "Instead, phrase comments as observations and questions: 'I noticed…', 'Have you considered…', "
+    "'Would it make sense to…', 'Curious if there's a reason for…'. "
+    "Never include severity prefixes like [HIGH], [MEDIUM], [LOW], [INFO], [WARNING], or [CONCERN] in the body text. "
+    "Keep each comment to 1-2 short sentences, straight to the point, with no unnecessary detail. "
+    "Only flag genuine issues with clear evidence."
 )
 
 
@@ -235,19 +233,20 @@ Return ONLY a valid JSON array. No markdown fences, no prose before or after.
 Each element must have exactly these fields:
 - "path": string — file path relative to repo root, must match the file path in the diff exactly
 - "line": integer — line number in the NEW file, must point to an added or changed line (lines starting with + in the diff, excluding +++ headers)
-- "body": string — markdown-formatted comment explaining the issue, constructive and actionable
-- "severity": string — one of "info", "warning", or "concern"
+- "body": string — 1-2 short sentences explaining the issue. Write like a friendly teammate: polite, curious, helpful. Use phrases like "I noticed...", "Have you considered...", "Would it make sense to...". Do NOT include any severity prefix like [HIGH], [MEDIUM], [LOW], [INFO], [WARNING], or [CONCERN] in the body. No bold labels, no headers, no bullet lists inside the body — just plain conversational text.
+- "severity": string — one of "info", "warning", or "concern" (this goes in the severity field only, never in the body)
 
 Severity guide:
 - "info": minor suggestion or improvement, not a blocker
-- "warning": potential issue that should be addressed
-- "concern": significant issue that could cause harm or should block merge
+- "warning": potential issue worth looking into
+- "concern": significant issue that could cause harm
 
 Rules:
 - If no issues found, return exactly: []
 - Each finding must map to a real changed line in the diff
 - Do not fabricate line numbers or file paths
-- Keep body concise but informative (2-4 sentences)
+- Keep body to 1-2 short, complete sentences — no truncation, no unnecessary detail
+- Sound human, not robotic — be conversational and kind
 
 Example:
 ```json
@@ -255,7 +254,7 @@ Example:
   {
     "path": "src/example.ts",
     "line": 42,
-    "body": "**Warning**\\n\\nThis validation rejects non-ASCII names. Use unicode-aware validation instead.",
+    "body": "I noticed this validation rejects non-ASCII names — have you considered using unicode-aware validation instead?",
     "severity": "warning"
   }
 ]
@@ -908,7 +907,13 @@ def resolve_changed_line(
 # Inline comment building
 # ---------------------------------------------------------------------------
 
-MAX_INLINE_DETAIL_CHARS = 300
+MAX_INLINE_DETAIL_CHARS = 2000
+
+# Regex to strip any severity prefix the LLM might still add to body text
+_SEVERITY_PREFIX_RE = re.compile(
+    r"^\s*\[(?:HIGH|MEDIUM|LOW|INFO|WARNING|CONCERN|CRITICAL)\]\s*",
+    re.IGNORECASE,
+)
 
 
 def _clamp_text(value: str, max_length: int) -> str:
@@ -991,7 +996,10 @@ def build_inline_comments(
         if resolved is None:
             continue
 
-        body = _clamp_text(finding.body.strip(), MAX_INLINE_DETAIL_CHARS)
+        body = _clamp_text(
+            _SEVERITY_PREFIX_RE.sub("", finding.body.strip()),
+            MAX_INLINE_DETAIL_CHARS,
+        )
         dedupe_key = f"{file_record.filename}:{resolved}:{body.lower()}"
 
         candidates.append((file_record.filename, resolved, body, finding.severity, dedupe_key))
@@ -1250,29 +1258,25 @@ def _main() -> None:
     print(f"Generated {len(findings)} findings")
 
     # --- Build review body (summary for Conversation tab) ---
-    severity_counts: dict[str, int] = {}
-    for finding in findings:
-        severity_counts[finding.severity] = severity_counts.get(finding.severity, 0) + 1
-
     review_body_lines = [
         "## CCR Review",
         "",
-        f"**Architecture:** {architecture}",
-        f"**Files reviewed:** {len(code_files)}",
-        f"**Findings:** {len(findings)}",
+        f"Reviewed **{len(code_files)} file(s)** using the {architecture} architecture.",
     ]
 
-    if severity_counts:
-        parts = [f"{count} {sev}" for sev, count in sorted(severity_counts.items())]
-        review_body_lines.append(f"**Severity breakdown:** {', '.join(parts)}")
-
     if findings:
+        review_body_lines.append(f"Found **{len(findings)} item(s)** worth a closer look:")
         review_body_lines.append("")
-        review_body_lines.append("Top findings:")
         for f in findings[:5]:
-            emoji = SEVERITY_EMOJI.get(f.severity, "")
-            location = f"{f.path}:{f.line}"
-            review_body_lines.append(f"- {emoji} **[{f.severity.upper()}]** {location}")
+            clean_body = _SEVERITY_PREFIX_RE.sub("", f.body.strip())
+            # First sentence only, for the summary
+            first_sentence = re.split(r"(?<=[.!?])\s", clean_body, maxsplit=1)[0]
+            location = f"`{f.path}:{f.line}`"
+            review_body_lines.append(f"- {location} — {first_sentence}")
+        if len(findings) > 5:
+            review_body_lines.append(f"- …and {len(findings) - 5} more")
+    else:
+        review_body_lines.append("Nothing stood out — looks good!")
 
     review_body = "\n".join(review_body_lines)
 
@@ -1301,18 +1305,12 @@ def _main() -> None:
         "",
     ]
 
-    if severity_counts:
-        report_lines.append("## Severity Breakdown")
-        for sev, count in sorted(severity_counts.items()):
-            report_lines.append(f"- {sev}: {count}")
-        report_lines.append("")
-
     if findings:
         report_lines.append("## Findings")
         for finding in findings:
-            emoji = SEVERITY_EMOJI.get(finding.severity, "")
-            report_lines.append(f"### {emoji} [{finding.severity.upper()}] {finding.path}:{finding.line}")
-            report_lines.append(finding.body)
+            clean_body = _SEVERITY_PREFIX_RE.sub("", finding.body.strip())
+            report_lines.append(f"### `{finding.path}:{finding.line}`")
+            report_lines.append(clean_body)
             report_lines.append("")
     else:
         report_lines.append("## Findings")

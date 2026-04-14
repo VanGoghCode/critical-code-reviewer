@@ -458,6 +458,22 @@ class TestOutputFormatContract:
         assert isinstance(f.body, str)
         assert f.severity in ("info", "warning", "concern")
 
+    def test_conversational_contract_format(self) -> None:
+        """New expected format: conversational body, no severity prefix."""
+        response = json.dumps([
+            {
+                "path": "src/example.ts",
+                "line": 42,
+                "body": "I noticed this validation rejects non-ASCII names — have you considered unicode-aware validation?",
+                "severity": "warning",
+            }
+        ])
+        findings = ccr.parse_findings(response)
+        assert len(findings) == 1
+        f = findings[0]
+        assert f.body.startswith("I noticed")
+        assert "[" not in f.body  # no severity prefix
+
     def test_empty_review_contract(self) -> None:
         findings = ccr.parse_findings("[]")
         assert findings == []
@@ -507,7 +523,66 @@ class TestBuildUserPrompt:
 
 class TestReviewBody:
 
-    def test_severity_emoji_mapping(self) -> None:
-        assert ccr.SEVERITY_EMOJI["info"] == "\u2139\ufe0f"
-        assert ccr.SEVERITY_EMOJI["warning"] == "\u26a0\ufe0f"
-        assert ccr.SEVERITY_EMOJI["concern"] == "\U0001f534"
+    def test_severity_prefix_stripped_from_body(self) -> None:
+        stripped = ccr._SEVERITY_PREFIX_RE.sub("", "[HIGH] something bad")
+        assert stripped == "something bad"
+
+    def test_severity_prefix_case_insensitive(self) -> None:
+        stripped = ccr._SEVERITY_PREFIX_RE.sub("", "[medium] issue here")
+        assert stripped == "issue here"
+
+    def test_no_severity_prefix_unchanged(self) -> None:
+        stripped = ccr._SEVERITY_PREFIX_RE.sub("", "I noticed something odd here")
+        assert stripped == "I noticed something odd here"
+
+    def test_all_severity_prefixes_stripped(self) -> None:
+        for prefix in ["HIGH", "MEDIUM", "LOW", "INFO", "WARNING", "CONCERN", "CRITICAL"]:
+            stripped = ccr._SEVERITY_PREFIX_RE.sub("", f"[{prefix}] test")
+            assert stripped == "test"
+
+    def test_severity_prefix_with_leading_whitespace(self) -> None:
+        stripped = ccr._SEVERITY_PREFIX_RE.sub("", "  [HIGH] trimmed")
+        assert stripped == "trimmed"
+
+    def test_inline_comment_strips_severity_prefix(self) -> None:
+        """build_inline_comments must strip [HIGH] from the body of posted comments."""
+        patch = "@@ -1,3 +1,4 @@\n context\n+added line\n context\n"
+        files = [ccr.PRFile("src/a.py", "modified", patch, 5, 2)]
+        findings = [ccr.Finding(
+            path="src/a.py", line=2,
+            body="[HIGH] I noticed a privacy concern here",
+            severity="concern",
+        )]
+        comments = ccr.build_inline_comments(findings, files, max_comments=5)
+        assert len(comments) >= 1
+        assert not comments[0].body.startswith("[")
+        assert "I noticed a privacy concern here" in comments[0].body
+
+    def test_long_body_not_truncated_at_old_limit(self) -> None:
+        """Bodies longer than 300 chars (old limit) should not be truncated."""
+        long_body = "I noticed this validation might cause issues. " * 10  # ~480 chars
+        patch = "@@ -1,3 +1,4 @@\n context\n+added line\n context\n"
+        files = [ccr.PRFile("src/a.py", "modified", patch, 5, 2)]
+        findings = [ccr.Finding(path="src/a.py", line=2, body=long_body, severity="warning")]
+        comments = ccr.build_inline_comments(findings, files, max_comments=5)
+        assert len(comments) >= 1
+        assert len(comments[0].body) > 300
+
+    def test_system_prompt_has_tone_instructions(self) -> None:
+        assert "polite" in ccr.SYSTEM_PROMPT.lower()
+        assert "curious" in ccr.SYSTEM_PROMPT.lower()
+        assert "helpful" in ccr.SYSTEM_PROMPT.lower()
+        assert "[HIGH]" in ccr.SYSTEM_PROMPT  # explicitly banned
+
+    def test_output_format_has_tone_instructions(self) -> None:
+        prompt = ccr.OUTPUT_FORMAT_PROMPT.lower()
+        assert "conversational" in prompt
+        assert "i noticed" in prompt
+        assert "have you considered" in prompt
+        assert "[high]" in prompt  # explicitly banned in body
+
+    def test_output_format_example_is_conversational(self) -> None:
+        """The example body in OUTPUT_FORMAT_PROMPT should use conversational style."""
+        assert "I noticed" in ccr.OUTPUT_FORMAT_PROMPT
+        # Should NOT contain the old bold-label style
+        assert "**Warning**" not in ccr.OUTPUT_FORMAT_PROMPT

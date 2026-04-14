@@ -24,9 +24,11 @@ Evaluate the provided data flow, feature, UI, backend logic, or change request.
 - You MUST return valid JSON matching the schema specified in the system instructions
 - For each criterion that receives Risk or Fail, add one entry to the findings array
 - Include the specific file path (matching the diff exactly) and line number for every finding
-- Identify where consent enforcement is missing or weak in the detail field
-- Note any revocation, access-control, or test gaps
-- Recommend concrete privacy safeguards in the recommendation field
+- In the detail field, write 1-2 short, conversational sentences about where consent enforcement seems missing or weak — be polite, curious, helpful
+- Note any revocation, access-control, or test gaps you spot
+- In the recommendation field, phrase suggestions as questions or friendly observations
+- Never include severity prefixes like [HIGH], [MEDIUM], or [LOW] in the detail or recommendation text
+- Avoid robotic commands — no "must", "should", "ensure" as imperatives
 
 [STATE PRESERVATION REQUIREMENTS]
 - Treat all previous stage outputs as mandatory persistent context. This final stage must retain the full audit history with no loss of prior details, and any correction to earlier material must be explicitly labeled and justified.

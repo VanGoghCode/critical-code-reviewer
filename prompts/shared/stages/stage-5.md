@@ -44,9 +44,11 @@ Evaluate the provided model outputs, analytics, decision workflow, UI, or change
 - You MUST return valid JSON matching the schema specified in the system instructions
 - For each criterion that receives Risk or Fail, add one entry to the findings array
 - Include the specific file path (matching the diff exactly) and line number for every finding
-- Distinguish explanation quality from validation quality from review safeguards in the detail field
-- Identify misleading claims, scope mismatches, or missing contestation paths
-- Recommend fixes for explainability, validation, and human oversight in the recommendation field
+- In the detail field, write 1-2 short, conversational sentences about explainability, validation, or oversight gaps — be polite, curious, helpful
+- Point out misleading claims, scope mismatches, or missing contestation paths
+- In the recommendation field, phrase suggestions as questions or friendly observations
+- Never include severity prefixes like [HIGH], [MEDIUM], or [LOW] in the detail or recommendation text
+- Avoid robotic commands — no "must", "should", "ensure" as imperatives
 
 [STATE PRESERVATION REQUIREMENTS]
 - Treat all previous stage outputs as mandatory persistent context. Preserve all earlier evidence, determinations, and remediation items so the cumulative audit remains complete and no previously surfaced issue is lost.
