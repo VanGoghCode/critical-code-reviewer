@@ -1,88 +1,133 @@
 # CCR Review Action
 
-CCR Review is a reusable GitHub Action that reviews a PR-style change set, runs one of three configurable prompt architectures, and writes the resulting report to `CCR.md` in the repository root.
+CCR (Critical Code Review) is a reusable GitHub Action that performs automated ethical code review on pull requests in educational technology projects. It analyzes PR diffs against a fairness and ethics framework using an LLM, then posts findings as inline PR comments and writes a `CCR.md` report.
 
-The published action surface is the Node 24 action defined in `action.yml`.
+The action runs on Node 24 (defined in `action.yml`) and uses the ASU AIML provider as its LLM backend.
 
 ## What It Does
 
-- Collects changed files from the pull request API when PR context is available, or falls back to explicit local git ranges.
-- Feeds changed file content, git range context, and commit messages into a shared review engine.
-- Runs one of three architectures:
-  - `single-pass`: one review call over the entire change set.
-  - `iterative`: six shared sequential stages that refine the previous stage output.
-  - `parallel`: the same six shared stages in parallel followed by a combine stage.
-- Writes the final markdown report to `CCR.md` or a path you choose.
-- Optionally posts short inline pull request review comments on mapped changed lines.
-- Exposes outputs for report path, summary, risk level, finding count, architecture ID, and inline comment counts.
+- Collects changed files from the GitHub PR API or falls back to local git ranges.
+- Feeds diffs, context, and commit messages through a configurable review engine.
+- Runs one of three prompt architectures:
+  - **`single-pass`** — one LLM call over the entire change set.
+  - **`iterative`** — six sequential stages that refine previous stage output.
+  - **`parallel`** — six stages in parallel, followed by a combine step.
+- Each architecture reviews changes across six ethical dimensions:
+  1. **Data Fairness** — training/evaluation data coverage
+  2. **Adaptive Progression Integrity** — adaptive fairness, thresholds
+  3. **Protected Attribute Governance** — attribute handling, mitigation
+  4. **Cultural and Accessibility Equity** — inclusivity, language, accessibility
+  5. **Explainability and Human Oversight** — AI output explainability, oversight
+  6. **Privacy and Consent** — learner privacy, consent handling
+- Writes a markdown report to `CCR.md` (configurable via `output-path`).
+- Optionally posts inline PR review comments on mapped changed lines.
+- Exposes outputs for report path, summary, risk level, finding count, and inline comment counts.
 
-Prompt files are part of this repository and are bundled with each action release tag.
+## Project Structure
 
-## Where To Set Up Prompts
+```
+critical-code-reviewer/
+├── action.yml                    # GitHub Action definition (Node 24)
+├── src/                          # TypeScript action source
+│   ├── action.ts                 # Action entry point
+│   └── core/                     # Engine, LLM, GitHub, prompts, reporting
+├── scripts/
+│   ├── build-action.mjs          # esbuild bundler (src → dist/index.cjs)
+│   └── ccr_reviewer.py           # Standalone Python CLI reviewer
+├── prompts/
+│   ├── architectures/
+│   │   ├── single-pass/          # manifest.json + prompt.md
+│   │   ├── iterative/            # manifest.json (uses shared stages)
+│   │   └── parallel/             # manifest.json + combine.md
+│   └── shared/stages/            # stage-1.md through stage-6.md
+├── tests/
+│   ├── engine.test.ts            # Vitest suite for review engine
+│   └── test_ccr_reviewer.py      # Pytest suite for Python reviewer
+├── .github/
+│   ├── ccr-framework.md          # Single-pass review criteria (Level 2 prompt)
+│   └── workflows/test.yml        # CI: typecheck, build, test
+├── Context/                      # Legacy reference docs and examples
+├── dist/index.cjs                # Bundled action (committed for releases)
+├── package.json                  # Node dependencies and scripts
+├── requirements.txt              # Python dependencies (requests)
+└── tsconfig.json                 # TypeScript configuration
+```
 
-Edit these files to define the review behavior:
+## Prompt Customization
 
-- [prompts/architectures/single-pass/manifest.json](prompts/architectures/single-pass/manifest.json) to control the single-pass architecture shape.
-- [prompts/architectures/iterative/manifest.json](prompts/architectures/iterative/manifest.json) to control the six-stage iterative pipeline.
-- [prompts/architectures/parallel/manifest.json](prompts/architectures/parallel/manifest.json) to control the six-stage parallel pipeline and its final combiner.
-- [prompts/architectures/single-pass/prompt.md](prompts/architectures/single-pass/prompt.md) for the single-pass prompt body.
-- [prompts/shared/stages/stage-1.md](prompts/shared/stages/stage-1.md) through [prompts/shared/stages/stage-6.md](prompts/shared/stages/stage-6.md) for the shared iterative and parallel stages.
-- [prompts/architectures/parallel/combine.md](prompts/architectures/parallel/combine.md) for the final parallel merge prompt.
+### Bundled Prompts (Default)
 
-The action reads these prompts from the bundled action path in GitHub Actions, so consumers do not need to copy the prompts into their own repository.
+Edit these files in this repository to change review behavior for all consumers:
 
-## Why Use It
+| File | Purpose |
+| --- | --- |
+| `prompts/architectures/single-pass/manifest.json` | Single-pass architecture shape |
+| `prompts/architectures/single-pass/prompt.md` | Single-pass prompt body |
+| `prompts/architectures/iterative/manifest.json` | Iterative six-stage pipeline config |
+| `prompts/architectures/parallel/manifest.json` | Parallel six-stage + combine config |
+| `prompts/shared/stages/stage-1.md` through `stage-6.md` | Stage prompts (shared by iterative and parallel) |
+| `prompts/architectures/parallel/combine.md` | Parallel merge prompt |
+| `.github/ccr-framework.md` | Review criteria used by single-pass mode |
 
-- You want a reusable review action with a publishable GitHub Action package.
-- You want to compare multiple prompt architectures against the same sample change set.
-- You want deterministic PR review automation in CI with configurable prompt architectures.
+Release a new tag after editing prompts so consumers pick up changes.
+
+### Repository-Local Prompts
+
+Use custom prompts in the consuming repository by setting an absolute `prompt-root`:
+
+```yaml
+with:
+  prompt-root: ${{ github.workspace }}/.github/ccr-prompts
+```
+
+Relative `prompt-root` resolves inside the action package path. Use an absolute path for repository-local prompt folders.
 
 ## Inputs
 
 | Input | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `api-key` | Yes | - | API key for the ASU AIML review provider. |
-| `base-url` | No | `https://api-main.aiml.asu.edu/queryV2` | Base URL for the ASU AIML query endpoint. |
-| `model-provider` | No | `asu` | ASU model provider identifier included in query requests. |
-| `model` | Yes | - | ASU model name to use for the review. |
-| `github-token` | No | - | GitHub token used to publish inline PR comments when enabled. |
-| `post-inline-comments` | No | `false` | Whether to publish short inline comments on changed lines in pull requests. |
-| `inline-comment-limit` | No | `10` | Maximum number of inline comments posted per run. |
-| `inline-comment-mode` | No | `findings` | Inline comment strategy: `findings` posts per finding, `file-coverage` ensures at least one comment per file with mappable findings. |
-| `architecture` | No | `single-pass` | Which architecture manifest to run. |
-| `prompt-root` | No | `prompts` | Directory containing the architecture manifests and prompt files. |
-| `output-path` | No | `CCR.md` | Where the final markdown report should be written. |
-| `base-ref` | No | inferred from the PR event or `HEAD~1` | Base git ref for the diff. |
-| `head-ref` | No | inferred from the PR event or `HEAD` | Head git ref for the diff. |
-| `include-globs` | No | `**/*` | Comma-separated list of included paths. |
-| `exclude-globs` | No | `node_modules/**,dist/**,coverage/**,.git/**` | Comma-separated list of excluded paths. |
-| `max-files` | No | `25` | Maximum number of changed files to include. |
-| `max-context-chars` | No | `12000` | Total prompt payload budget used to truncate file context. |
-| `temperature` | No | `0.2` | Sampling temperature for the model request. |
-| `request-timeout-ms` | No | `120000` | Timeout for the model request. |
+| `api-key` | Yes | — | API key for the ASU AIML provider. |
+| `base-url` | No | `https://api-main.aiml.asu.edu/queryV2` | ASU AIML query endpoint. |
+| `model-provider` | No | `asu` | ASU model provider identifier. |
+| `model` | Yes | — | ASU model name (e.g. `gpt5_2`). |
+| `github-token` | No | — | Token for inline PR comments. |
+| `post-inline-comments` | No | `false` | Post inline comments on changed lines. |
+| `inline-comment-limit` | No | `10` | Max inline comments per run. |
+| `inline-comment-mode` | No | `findings` | `findings` for per-finding, `file-coverage` for one per file. |
+| `architecture` | No | `single-pass` | Prompt architecture to run. |
+| `prompt-root` | No | `prompts` | Directory with manifests and prompt files. |
+| `output-path` | No | `CCR.md` | Report output path. |
+| `base-ref` | No | inferred from PR or `HEAD~1` | Base git ref for diff. |
+| `head-ref` | No | inferred from PR or `HEAD` | Head git ref for diff. |
+| `include-globs` | No | `**/*` | Comma-separated included paths. |
+| `exclude-globs` | No | `node_modules/**,dist/**,coverage/**,.git/**` | Comma-separated excluded paths. |
+| `max-files` | No | `25` | Max changed files to include. |
+| `max-context-chars` | No | `12000` | Total prompt payload budget. |
+| `temperature` | No | `0.2` | Model sampling temperature. |
+| `request-timeout-ms` | No | `120000` | Model request timeout. |
 
 ## Outputs
 
 | Output | Meaning |
 | --- | --- |
-| `report-path` | Absolute or workspace-relative path to the generated `CCR.md` file. |
-| `summary` | Concise summary extracted from the final review output. |
-| `risk-level` | Final risk level returned by the review. |
-| `finding-count` | Number of findings in the generated report. |
-| `architecture` | Architecture ID that ran for the review. |
-| `inline-comments-posted` | Number of inline comments posted on the pull request. |
-| `inline-comments-skipped` | Number of findings skipped during inline comment mapping. |
+| `report-path` | Path to the generated `CCR.md`. |
+| `summary` | Concise review summary. |
+| `risk-level` | Overall risk level. |
+| `finding-count` | Number of findings. |
+| `architecture` | Architecture ID that ran. |
+| `inline-comments-posted` | Inline comments posted. |
+| `inline-comments-skipped` | Findings skipped during comment mapping. |
 
 ## Permissions
 
-Minimum permission for report generation:
+Report generation only:
 
 ```yaml
 permissions:
   contents: read
 ```
 
-If you enable inline PR comments, add pull request write permission:
+With inline PR comments:
 
 ```yaml
 permissions:
@@ -90,10 +135,13 @@ permissions:
   pull-requests: write
 ```
 
-For `pull_request` runs with `github-token`, checkout is optional because changed files and patches are collected through GitHub pull request APIs.
-Use `actions/checkout@v5` with `fetch-depth: 0` when you rely on non-PR execution or explicit `base-ref`/`head-ref` local git diff workflows.
+For `pull_request` events, checkout is optional because the action collects files through the GitHub PR API. Use `actions/checkout@v6` with `fetch-depth: 0` when relying on non-PR execution or explicit `base-ref`/`head-ref`.
 
 ## Example Workflow
+
+### Minimal Setup
+
+Drop this into `.github/workflows/ccr-review.yml` to get started:
 
 ```yaml
 name: CCR Review
@@ -107,8 +155,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  review:
-    if: github.event.pull_request.draft == false
+  ccr-review:
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
 
     steps:
@@ -117,15 +165,138 @@ jobs:
         with:
           api-key: ${{ secrets.ASU_API_KEY }}
           github-token: ${{ github.token }}
-          base-url: https://api-main.aiml.asu.edu/queryV2
-          model-provider: asu
           model: gpt5_2
+```
+
+### Full Configuration
+
+Every available input with inline comments explaining what each does:
+
+```yaml
+name: CCR Review
+
+# ── Trigger on PR events ──────────────────────────────────────────────
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# ── Required permissions ──────────────────────────────────────────────
+permissions:
+  contents: read          # needed to read repo files via API
+  pull-requests: write    # needed to post inline review comments
+
+jobs:
+  ccr-review:
+    # Skip draft PRs and fork PRs (forks cannot access secrets)
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout is optional for pull_request events — the action fetches
+      # files through the GitHub PR API. Include it only if you need local
+      # git operations or are using explicit base-ref/head-ref.
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0    # full history needed for local git diff
+
+      - name: Run CCR review
+        uses: VanGoghCode/critical-code-reviewer@main
+        with:
+
+          # ── Required ──────────────────────────────────────────────
+          # ASU AIML API key (store as a repository secret)
+          api-key: ${{ secrets.ASU_API_KEY }}
+
+          # ASU model name — see ASU AIML docs for available models
+          # Examples: gpt5_2, gpt5_1, gpt4o, gpt4_1, claude4_5_sonnet
+          model: gpt5_2
+
+          # ── Authentication ────────────────────────────────────────
+          # GitHub token for posting inline PR comments.
+          # ${{ github.token }} is auto-provided by Actions.
+          github-token: ${{ github.token }}
+
+          # ── Provider endpoint ─────────────────────────────────────
+          # Override if using a different ASU AIML environment.
+          # Default: https://api-main.aiml.asu.edu/queryV2
+          # base-url: https://api-main-beta.aiml.asu.edu/queryV2
+
+          # ASU provider identifier sent with each request.
+          # Default: asu
+          # model-provider: asu
+
+          # ── Architecture ──────────────────────────────────────────
+          # single-pass : one LLM call, fastest, good for small PRs
+          # iterative   : 6 sequential stages, thorough, slower
+          # parallel    : 6 stages in parallel + combine, best coverage
+          # Default: single-pass
           architecture: parallel
+
+          # ── Inline comments ───────────────────────────────────────
+          # Post short review comments on specific PR lines.
+          # Default: "false"
           post-inline-comments: "true"
+
+          # Cap on inline comments per run to avoid noisy PRs.
+          # Default: "10"
           inline-comment-limit: "10"
+
+          # Strategy for placing inline comments:
+          #   findings      — one comment per finding (may cluster)
+          #   file-coverage — one comment per file with findings (spread)
+          # Default: findings
           inline-comment-mode: file-coverage
+
+          # ── Scope filtering ───────────────────────────────────────
+          # Comma-separated globs for files to include in review.
+          # Default: "**/*"
+          include-globs: "**/*"
+
+          # Comma-separated globs for files to exclude from review.
+          # Default: "node_modules/**,dist/**,coverage/**,.git/**"
+          exclude-globs: "node_modules/**,dist/**,coverage/**,.git/**,*.lock,*.min.js"
+
+          # ── Payload limits ────────────────────────────────────────
+          # Maximum number of changed files to send to the LLM.
+          # Default: "25"
+          max-files: "25"
+
+          # Total character budget for file context in the prompt.
+          # Higher = more context but slower and more expensive.
+          # Default: "12000"
+          max-context-chars: "12000"
+
+          # ── Model tuning ──────────────────────────────────────────
+          # Sampling temperature — lower is more deterministic.
+          # Default: "0.2"
+          temperature: "0.2"
+
+          # Request timeout in milliseconds.
+          # Increase for large PRs or slow models.
+          # Default: "120000" (2 minutes)
+          request-timeout-ms: "120000"
+
+          # ── Output ────────────────────────────────────────────────
+          # Path where the CCR markdown report is written.
+          # Default: CCR.md
           output-path: CCR.md
 
+          # ── Custom prompts ────────────────────────────────────────
+          # Directory containing architecture manifests and prompt files.
+          # Relative paths resolve inside the action package.
+          # Absolute paths point to files in the consuming repository.
+          # Default: prompts
+          # prompt-root: ${{ github.workspace }}/.github/ccr-prompts
+
+          # ── Git refs (advanced) ───────────────────────────────────
+          # Override the diff range. Auto-inferred for pull_request events.
+          # Default: inferred from PR event or HEAD~1 / HEAD
+          # base-ref: ${{ github.event.pull_request.base.sha }}
+          # head-ref: ${{ github.event.pull_request.head.sha }}
+
+      # Upload the report as a workflow artifact so it's downloadable
+      # even if the review step fails.
       - name: Upload CCR report
         if: always()
         uses: actions/upload-artifact@v4
@@ -135,62 +306,42 @@ jobs:
           if-no-files-found: ignore
 ```
 
-## Quick Setup In Any Repository
+## Quick Setup
 
-1. Add the workflow shown above at `.github/workflows/ccr-review.yml`.
-2. Set `uses` to this action ref, for example `VanGoghCode/critical-code-reviewer@main`.
-3. Add a repository secret named `ASU_API_KEY`.
-4. Open a PR and verify `CCR.md` is generated in the workflow artifact.
+1. Add one of the workflows above at `.github/workflows/ccr-review.yml` in your repository.
+2. Add a repository secret named `ASU_API_KEY` with your ASU AIML API key.
+3. Open a PR and verify `CCR.md` appears in the workflow artifact.
 
-For production stability, pin to a release tag (for example `@v1`) or a commit SHA once published.
+For stability, pin to a release tag (e.g. `@v1`) or a commit SHA instead of `@main`.
 
-## Common Customizations
+## Build and Test
 
-Change these `with` inputs in the workflow:
-
-- `architecture`: `single-pass` | `iterative` | `parallel`
-- `model`: set your preferred model name
-- `base-url`: set your ASU AIML endpoint
-- `model-provider`: set your ASU provider identifier when required
-- `post-inline-comments`: `true` to publish short line-level PR comments
-- `inline-comment-limit`: cap inline comments per run
-- `inline-comment-mode`: `findings` for per-finding comments, `file-coverage` to prioritize one comment per changed file with mappable findings
-- `output-path`: change review report output file
-- `include-globs` / `exclude-globs`: limit reviewed files
-- `max-files` / `max-context-chars`: control payload size
-- `temperature` / `request-timeout-ms`: tune model behavior and timeout
-
-## Prompt Source Options
-
-- Default: use prompts bundled inside this action release.
-- Repository-specific prompts: keep the same prompt/manifest structure in the repository where the workflow runs and set an absolute prompt root.
-
-```yaml
-with:
-  prompt-root: ${{ github.workspace }}/.github/ccr-prompts
-```
-
-Relative `prompt-root` resolves inside the action package path. Use absolute path for repository-local prompt folders.
-
-## Build And Test
+**TypeScript Action:**
 
 ```bash
+npm ci
+npm run typecheck
 npm run build
 npm test
-npm run lint
-npm run typecheck
 ```
 
-## Release Guidance
+**Python Reviewer:**
 
-1. Publish a versioned release tag, for example `v1.0.0`.
-2. Move the major tag `v1` to the latest compatible `v1.x.y` release commit.
-3. Ask consumers to pin either `@v1` for compatibility or a full commit SHA for maximum reproducibility.
-4. Keep the committed `dist/index.cjs` in sync with the TypeScript source by rebuilding before each release.
+```bash
+pip install -r requirements.txt
+python -m pytest tests/ -v
+```
+
+## Release
+
+1. Rebuild the bundle: `npm run build`
+2. Commit the updated `dist/index.cjs`
+3. Publish a versioned release tag (e.g. `v1.0.0`)
+4. Move the major tag (`v1`) to the latest compatible release commit
 
 ## Notes
 
-- The action always writes a markdown report (default `CCR.md`, configurable via `output-path`). Inline PR comments are optional and require `post-inline-comments: "true"` plus `pull-requests: write` permission.
-- Inline PR comments are published as pull request review comments and support single-line or block ranges when findings include `line` and `endLine`.
-- Pull request mode deduplicates against existing inline review comments to avoid reposting identical comments on every synchronize event.
-- Update prompts in this repository and release a new tag when you want all repositories using this action to get new review behavior.
+- The action always writes a markdown report. Inline comments require `post-inline-comments: "true"` plus `pull-requests: write`.
+- Inline comments are published as PR review comments and support single-line or block ranges.
+- The action deduplicates against existing inline review comments to avoid reposting on `synchronize` events.
+- Fork PRs cannot access repository secrets (`ASU_API_KEY`), so the workflow should skip forks.
