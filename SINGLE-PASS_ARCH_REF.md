@@ -82,7 +82,14 @@ Why:
 - Final JSON shape: `prompts/shared/output-format.md`.
 - Inline comment style: `src/core/inline-comments.ts`.
 
-## 8. Short rules
+## 8. How GitHub UI comments happen
+
+- The last JSON output is only input for `src/core/report.ts`.
+- Inline comments come from `src/core/inline-comments.ts` after line mapping.
+- `src/core/github-review.ts` posts GitHub review comments with the API.
+- So the JSON does not create UI comments by itself.
+
+## 9. Short rules
 
 - Change persona for voice.
 - Change prompt for findings.

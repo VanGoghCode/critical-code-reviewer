@@ -128,6 +128,7 @@ Why:
 - Review focus: `prompts/shared/stages/stage-*.md`, `prompts/architectures/single-pass/prompt.md`, combine `.md` files.
 - Final JSON shape: `prompts/shared/output-format.md`.
 - Inline comment behavior: `src/core/inline-comments.ts`, `src/core/patch-map.ts`.
+- GitHub UI comments: `src/core/github-review.ts`; JSON only feeds the comment builder.
 
 ## 9. High-level flow
 
