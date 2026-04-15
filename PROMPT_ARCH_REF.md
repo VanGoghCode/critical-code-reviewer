@@ -37,7 +37,7 @@ Short. Caveman mode. No fluff.
 
 Every call in `src/core/engine.ts` uses same stack:
 
-1. Identity: hardcoded `You are a code reviewer.`
+1. Identity: hardcoded ``
 2. Persona: shared persona or stage persona.
 3. Instructions: stage prompt file.
 4. Humanize: shared writing rules.

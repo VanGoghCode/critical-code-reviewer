@@ -22,7 +22,7 @@ Short. Caveman mode. Single-pass only.
 
 Every call uses same stack:
 
-1. Identity: hardcoded `You are a code reviewer.`
+1. Identity: hardcoded ``
 2. Persona: `prompts/shared/persona.md`
 3. Instructions: `prompts/architectures/single-pass/prompt.md`
 4. Humanize: `prompts/shared/humanize.md`

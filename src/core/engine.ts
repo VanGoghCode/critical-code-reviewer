@@ -138,7 +138,7 @@ function createMessages(params: {
   messages.push({
     role: "system",
     content: [
-      "You are a code reviewer.",
+      "",
       `Architecture: ${params.architecture.label} (${params.architecture.id}).`,
       `Mode: ${params.mode}.`,
       `Current stage: ${params.stageLabel}.`,

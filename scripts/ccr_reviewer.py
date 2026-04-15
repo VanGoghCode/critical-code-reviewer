@@ -211,7 +211,7 @@ def call_asu(config: AsuConfig, system_prompt: str, user_prompt: str) -> str:
 # ---------------------------------------------------------------------------
 
 # Layer 1: Identity (hardcoded, never loaded from file)
-_IDENTITY_PROMPT = "You are a code reviewer."
+_IDENTITY_PROMPT = ""
 
 
 def _load_shared_prompt(filename: str) -> str:
