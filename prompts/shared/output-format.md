@@ -11,7 +11,7 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
 
 ```json
 {
-  "summary": "Brief description of what the PR does and which learner-facing systems it affects.",
+  "summary": "50-80 words, 1-2 paragraphs. First paragraph acknowledges what is done well (solid patterns, good practices, clean structure). Second paragraph notes what could be improved or is worth revisiting. Conversational, no bullet points.",
   "riskLevel": "low | medium | high",
   "findings": [
     {
@@ -31,7 +31,7 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
 
 ### Field Rules
 
-- `summary`: What the PR does and which learner-facing systems it affects.
+- `summary`: 50-80 words total, 1-2 paragraphs. First acknowledge what the PR does well — solid patterns, thoughtful design choices, good test coverage, clean abstractions, or anything commendable. Then note what could be improved or is worth another look. Be specific to this PR, not generic. Conversational tone, no bullet points, no filler.
 - `riskLevel`: `low` = no warnings or flags, `medium` = warnings present, `high` = one or more flags must be resolved before merge.
 - `findings`: One entry per issue found. Each finding **MUST** include:
   - `file`: Exact path from the diff input (required — never omit).
@@ -52,4 +52,4 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
 
 ### Example
 
-{"summary":"Adds login flow","riskLevel":"medium","findings":[{"severity":"high","title":"Hardcoded secret","detail":"I noticed the JWT secret is hardcoded in source — have you considered loading it from an environment variable instead?","file":"src/api/auth.ts","line":14}],"todos":[],"notes":[]}
+{"summary":"The PR introduces a clean login flow with proper input validation and error handling — the separation of concerns between the auth service and route handlers is well done. One area worth revisiting is the credential storage approach, along with a couple of edge cases in the token refresh logic.","riskLevel":"medium","findings":[{"severity":"high","title":"Hardcoded secret","detail":"The JWT signing key appears to be hardcoded in the source rather than loaded from environment configuration — worth pulling it into a secrets manager or env var.","file":"src/api/auth.ts","line":14}],"todos":[],"notes":[]}
