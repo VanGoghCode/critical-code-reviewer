@@ -31542,7 +31542,8 @@ function buildProvider() {
 }
 async function main() {
   try {
-    const promptRoot = core.getInput("prompt-root") || "prompts";
+    const promptRootInput = core.getInput("prompt-root") || "prompts";
+    const promptRoot = resolvePromptRoot(promptRootInput);
     const architectureId = core.getInput("architecture") || "single-pass";
     const includeGlobs = readCsvInput("include-globs", "**/*");
     const excludeGlobs = readCsvInput(
@@ -31572,7 +31573,7 @@ async function main() {
         core.info(line);
       }
     });
-    const architecture = await loadArchitectureById(promptRoot || "prompts", architectureId);
+    const architecture = await loadArchitectureById(promptRoot, architectureId);
     const reviewContext = await collectReviewContext(repoRoot, {
       repositoryName: import_github.context.repo.owner && import_github.context.repo.repo ? `${import_github.context.repo.owner}/${import_github.context.repo.repo}` : void 0,
       metadata: core.getInput("metadata") || void 0,
@@ -31625,7 +31626,7 @@ async function main() {
       provider,
       logger,
       maxContextChars,
-      promptRoot: promptRoot || "prompts"
+      promptRoot
     });
     await core.summary.addRaw(result.report.markdown).write();
     let inlineCommentsPosted = 0;

@@ -20,6 +20,7 @@ import {
 import { createAsuAimlProvider } from "./core/llm.js";
 import { createLogger } from "./core/logging.js";
 import { loadArchitectureById } from "./core/manifest.js";
+import { resolvePromptRoot } from "./core/prompt-loader.js";
 
 function readCsvInput(name: string, fallback: string): string[] {
   const raw = core.getInput(name) || fallback;
@@ -145,7 +146,8 @@ function buildProvider() {
 
 async function main(): Promise<void> {
   try {
-    const promptRoot = core.getInput("prompt-root") || "prompts";
+    const promptRootInput = core.getInput("prompt-root") || "prompts";
+    const promptRoot = resolvePromptRoot(promptRootInput);
     const architectureId = core.getInput("architecture") || "single-pass";
     const includeGlobs = readCsvInput("include-globs", "**/*");
     const excludeGlobs = readCsvInput(
@@ -178,7 +180,7 @@ async function main(): Promise<void> {
       }
     });
 
-    const architecture = await loadArchitectureById(promptRoot || "prompts", architectureId);
+    const architecture = await loadArchitectureById(promptRoot, architectureId);
     const reviewContext = await collectReviewContext(repoRoot, {
       repositoryName:
         context.repo.owner && context.repo.repo
@@ -242,7 +244,7 @@ async function main(): Promise<void> {
       provider,
       logger,
       maxContextChars,
-      promptRoot: promptRoot || "prompts",
+      promptRoot,
     });
 
     await core.summary.addRaw(result.report.markdown).write();
