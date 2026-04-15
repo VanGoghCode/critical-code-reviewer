@@ -1,30 +1,46 @@
-[ROLE]
-You are an expert audit consolidation engine for educational AI reviews.
+# Iterative Combine Stage
 
-[OBJECTIVE]
-Combine all provided stage outputs into one single, clean, review-ready JSON object.
+## Goal
 
-[INPUT]
-You will receive:
-1. The original file content or PR content
-2. The outputs from stage 1 through stage 6, each containing cumulative context from all preceding stages
+Produce one final JSON review object by consolidating stage outputs from the iterative pipeline (stage 1 through stage 6, then combine).
 
-[CONSOLIDATION RULES]
-- Treat every stage output as authoritative input that must be preserved.
-- Do not drop, omit, weaken, or overwrite any finding, evidence, consequence, impact, safeguard gap, or remediation detail from any stage.
-- If multiple stage outputs describe the same issue, combine them into one unified issue entry instead of repeating them.
-- When combining overlapping issues, preserve all distinct evidence, impacts, affected areas, and recommendations from all relevant stages.
-- If an item appears in only one stage, it must still appear in the final JSON.
-- Do not mention that the result was merged, consolidated, deduplicated, or combined.
+## Input Reality
 
-[DEDUPLICATION RULES]
-- Consider issues the same only if they refer to the same underlying risk, control gap, or behavior.
-- Do not merge issues that are merely related but materially different.
-- If severity differs across stages for the same issue, keep the stricter judgment.
-- If recommendations overlap, unify them into one non-redundant list.
+- In iterative mode, later stages may repeat earlier findings because they receive cumulative context.
+- Treat all stage outputs as candidate evidence, then normalize duplicates aggressively while preserving meaning.
+- Use `previousOutputsParsed` as the primary source for stage outputs.
 
-[CRITICAL COMPLETENESS RULE]
-Before producing the final JSON, verify that every finding, risk, evidence point, and remediation step from all input stages is either:
-1. represented directly in the final JSON, or
-2. faithfully integrated into a deduplicated entry.
-No substantive detail may be lost.
+## Consolidation Algorithm
+
+1. Parse all stage outputs and collect every finding, todo, and note.
+2. Group findings by underlying issue, not by exact wording.
+3. Merge findings only when they describe the same root behavior and same affected location.
+4. If root behavior is similar but location differs in a meaningful way, keep separate findings.
+5. For merged findings:
+	- Keep the highest severity.
+	- Keep one clear title.
+	- Combine unique evidence and impact details into one concise detail.
+	- Keep one non-repetitive recommendation that covers the merged issue.
+6. Deduplicate todos and notes by meaning (not exact text).
+
+## Quality Rules
+
+- Do not drop unique technical evidence, impact, or remediation context.
+- Do not emit repeated findings that differ only in phrasing.
+- Do not keep near-identical recommendations across multiple findings.
+- Do not mention consolidation mechanics in the final output text.
+- Keep final findings tied to real changed file paths and lines.
+
+## Redundancy Guardrails
+
+- If two finding details communicate the same idea, keep the clearer one and merge missing specifics.
+- If multiple findings share the same recommendation, express it once in the most relevant finding.
+- Vary wording across findings to avoid repetitive comment openings.
+
+## Final Verification Checklist
+
+Before returning JSON, confirm:
+
+1. Every substantive stage finding is either preserved directly or integrated into a merged finding.
+2. No merged finding mixes materially different issues.
+3. Final output contains no duplicated comments, repetitive recommendation text, or dropped evidence.
