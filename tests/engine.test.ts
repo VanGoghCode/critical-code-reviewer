@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { runReviewArchitecture } from "../src/core/engine";
 import { createLogger } from "../src/core/logging";
 import { loadArchitectureById } from "../src/core/manifest";
+import { readPromptText } from "../src/core/prompt-loader";
 import type { ReviewProvider, ReviewProviderRequest } from "../src/core/types";
 
 function createTestProvider(): ReviewProvider {
@@ -69,7 +70,7 @@ describe("review engine", () => {
       }
 
       if (architectureId === "iterative") {
-        expect(result.stageOutputs).toHaveLength(6);
+        expect(result.stageOutputs).toHaveLength(7);
       }
 
       if (architectureId === "parallel") {
@@ -80,39 +81,45 @@ describe("review engine", () => {
   );
 
   it("stages parallel runs with a 1 second launch gap and executes combine once", async () => {
+    // Pre-load architecture and shared layers with real timers (file I/O)
+    const architecture = await loadArchitectureById("prompts", "parallel");
+    const sharedLayers = {
+      persona: await readPromptText("prompts", "shared/persona.md"),
+      humanize: await readPromptText("prompts", "shared/humanize.md"),
+      outputFormat: await readPromptText("prompts", "shared/output-format.md"),
+    };
+    const logger = createLogger(() => {
+      return;
+    });
+
+    const callHistory: Array<{
+      stageId: string;
+      previousOutputsCount: number;
+      startedAt: number;
+    }> = [];
+
+    const provider: ReviewProvider = {
+      async review(input: ReviewProviderRequest): Promise<string> {
+        callHistory.push({
+          stageId: input.stage.id,
+          previousOutputsCount: input.previousOutputs.length,
+          startedAt: Date.now(),
+        });
+
+        return JSON.stringify({
+          summary: `Output for ${input.stage.id}`,
+          riskLevel: "low",
+          findings: [],
+          todos: [],
+          notes: [],
+        });
+      },
+    };
+
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-06T00:00:00.000Z"));
 
     try {
-      const architecture = await loadArchitectureById("prompts", "parallel");
-      const logger = createLogger(() => {
-        return;
-      });
-
-      const callHistory: Array<{
-        stageId: string;
-        previousOutputsCount: number;
-        startedAt: number;
-      }> = [];
-
-      const provider: ReviewProvider = {
-        async review(input: ReviewProviderRequest): Promise<string> {
-          callHistory.push({
-            stageId: input.stage.id,
-            previousOutputsCount: input.previousOutputs.length,
-            startedAt: Date.now(),
-          });
-
-          return JSON.stringify({
-            summary: `Output for ${input.stage.id}`,
-            riskLevel: "low",
-            findings: [],
-            todos: [],
-            notes: [],
-          });
-        },
-      };
-
       const runPromise = runReviewArchitecture({
         architecture,
         request: {
@@ -128,6 +135,7 @@ describe("review engine", () => {
         provider,
         logger,
         maxContextChars: 8000,
+        sharedLayers,
       });
 
       await vi.runAllTimersAsync();
@@ -155,7 +163,7 @@ describe("review engine", () => {
     }
   });
 
-  it("chains iterative stages with only the immediate previous output", async () => {
+  it("chains iterative stages with cumulative previous outputs", async () => {
     const architecture = await loadArchitectureById("prompts", "iterative");
     const logger = createLogger(() => {
       return;
@@ -200,15 +208,22 @@ describe("review engine", () => {
       maxContextChars: 8000,
     });
 
-    expect(callHistory).toHaveLength(6);
+    expect(callHistory).toHaveLength(7);
     expect(callHistory[0]?.previousOutputs).toEqual([]);
 
-    callHistory.slice(1).forEach((call, index) => {
-      const previousStageId = `stage-${index + 1}`;
-      expect(call.previousOutputs).toHaveLength(1);
-      const previousOutput = JSON.parse(call.previousOutputs[0] ?? "{}");
-      expect(previousOutput.summary).toBe(`Output for ${previousStageId}`);
+    // Each stage N receives all outputs from stages 1 through N-1
+    callHistory.slice(1, 6).forEach((call, index) => {
+      expect(call.previousOutputs).toHaveLength(index + 1);
+      for (let i = 0; i <= index; i += 1) {
+        const previousOutput = JSON.parse(call.previousOutputs[i] ?? "{}");
+        expect(previousOutput.summary).toBe(`Output for stage-${i + 1}`);
+      }
     });
+
+    // Combine stage receives all 6 stage outputs
+    const combineCall = callHistory[6];
+    expect(combineCall?.stageId).toBe("combine");
+    expect(combineCall?.previousOutputs).toHaveLength(6);
   });
 
   it("provides parsed previous outputs in iterative user envelope", async () => {
@@ -225,9 +240,14 @@ describe("review engine", () => {
           const userMessage = input.messages.find(
             (message) => message.role === "user",
           );
-          stageTwoEnvelope = userMessage?.content
-            ? (JSON.parse(userMessage.content) as Record<string, unknown>)
-            : undefined;
+          if (userMessage?.content) {
+            // Extract JSON envelope from the start of the user message
+            // (may be followed by Layer 5 output-format text)
+            const content = userMessage.content as string;
+            const jsonEnd = content.indexOf("\n\n<!--");
+            const jsonText = jsonEnd >= 0 ? content.slice(0, jsonEnd) : content;
+            stageTwoEnvelope = JSON.parse(jsonText) as Record<string, unknown>;
+          }
         }
 
         return JSON.stringify({

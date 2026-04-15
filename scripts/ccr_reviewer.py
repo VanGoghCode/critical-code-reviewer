@@ -207,59 +207,49 @@ def call_asu(config: AsuConfig, system_prompt: str, user_prompt: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 3-Level Prompts
+# 5-Layer Prompt System
 # ---------------------------------------------------------------------------
 
-# Level 1: System prompt (general reviewer instructions)
-SYSTEM_PROMPT = (
-    "You are a thoughtful, experienced code reviewer giving feedback on a colleague's pull request. "
-    "You review diffs against ethical and technical criteria and return findings in JSON format. "
-    "Write like a friendly teammate — be polite, curious, and helpful. "
-    "Avoid robotic or authoritative language (no 'must', 'should', 'ensure', 'add', 'implement' as commands). "
-    "Instead, phrase comments as observations and questions: 'I noticed…', 'Have you considered…', "
-    "'Would it make sense to…', 'Curious if there's a reason for…'. "
-    "Never include severity prefixes like [HIGH], [MEDIUM], [LOW], [INFO], [WARNING], or [CONCERN] in the body text. "
-    "Keep each comment to 1-2 short sentences, straight to the point, with no unnecessary detail. "
-    "Only flag genuine issues with clear evidence."
-)
+# Layer 1: Identity (hardcoded, never loaded from file)
+_IDENTITY_PROMPT = "You are a code reviewer."
 
 
-# Level 3: Output format (exact JSON contract)
-OUTPUT_FORMAT_PROMPT = """\
-## Output Format
+def _load_shared_prompt(filename: str) -> str:
+    """Load a shared prompt layer from prompts/shared/."""
+    root = _find_repo_root()
+    path = root / "prompts" / "shared" / filename
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return ""
 
-Return ONLY a valid JSON array. No markdown fences, no prose before or after.
 
-Each element must have exactly these fields:
-- "path": string — file path relative to repo root, must match the file path in the diff exactly
-- "line": integer — line number in the NEW file, must point to an added or changed line (lines starting with + in the diff, excluding +++ headers)
-- "body": string — 1-2 short sentences explaining the issue. Write like a friendly teammate: polite, curious, helpful. Use phrases like "I noticed...", "Have you considered...", "Would it make sense to...". Do NOT include any severity prefix like [HIGH], [MEDIUM], [LOW], [INFO], [WARNING], or [CONCERN] in the body. No bold labels, no headers, no bullet lists inside the body — just plain conversational text.
-- "severity": string — one of "info", "warning", or "concern" (this goes in the severity field only, never in the body)
+def _build_layered_system_prompt(stage_prompt: str) -> str:
+    """Assemble Layers 1 + 2 + 3 + 4 into the system prompt.
 
-Severity guide:
-- "info": minor suggestion or improvement, not a blocker
-- "warning": potential issue worth looking into
-- "concern": significant issue that could cause harm
+    Layer 1: Identity (hardcoded)
+    Layer 2: Persona (shared/persona.md)
+    Layer 3: Stage-specific instructions (editable stage prompt)
+    Layer 4: Humanize (shared/humanize.md)
+    """
+    parts: list[str] = [_IDENTITY_PROMPT]
 
-Rules:
-- If no issues found, return exactly: []
-- Each finding must map to a real changed line in the diff
-- Do not fabricate line numbers or file paths
-- Keep body to 1-2 short, complete sentences — no truncation, no unnecessary detail
-- Sound human, not robotic — be conversational and kind
+    persona = _load_shared_prompt("persona.md").strip()
+    if persona:
+        parts.append(persona)
 
-Example:
-```json
-[
-  {
-    "path": "src/example.ts",
-    "line": 42,
-    "body": "I noticed this validation rejects non-ASCII names — have you considered using unicode-aware validation instead?",
-    "severity": "warning"
-  }
-]
-```\
-"""
+    if stage_prompt.strip():
+        parts.append(stage_prompt.strip())
+
+    humanize = _load_shared_prompt("humanize.md").strip()
+    if humanize:
+        parts.append(humanize)
+
+    return "\n\n---\n\n".join(parts)
+
+
+def _get_output_format() -> str:
+    """Load Layer 5: output format from shared file."""
+    return _load_shared_prompt("output-format.md")
 
 
 def build_user_prompt(
@@ -268,7 +258,7 @@ def build_user_prompt(
     previous_outputs: Optional[list[str]] = None,
     max_context_chars: int = DEFAULT_MAX_CONTEXT_CHARS,
 ) -> str:
-    """Build the user prompt (level 2 + diffs + level 3)."""
+    """Build the user prompt (level 2 + diffs + level 5)."""
     parts: list[str] = []
 
     # Level 2: Framework prompt (what to look for, persona)
@@ -297,8 +287,10 @@ def build_user_prompt(
             parts.append(truncated)
             parts.append("")
 
-    # Level 3: Output format
-    parts.append(OUTPUT_FORMAT_PROMPT)
+    # Layer 5: Output format
+    output_format = _get_output_format()
+    if output_format.strip():
+        parts.append(output_format.strip())
 
     result = "\n".join(parts)
 
@@ -327,7 +319,9 @@ def build_user_prompt(
                 truncated_parts.append(f"### Stage {i} Output")
                 truncated_parts.append(truncated)
                 truncated_parts.append("")
-        truncated_parts.append(OUTPUT_FORMAT_PROMPT)
+        output_format = _get_output_format()
+        if output_format.strip():
+            truncated_parts.append(output_format.strip())
         result = "\n".join(truncated_parts)
 
     return result
@@ -439,47 +433,6 @@ def load_framework_md() -> str:
     return ""
 
 
-def _load_guard(filename: str) -> str:
-    """Load a guard file from prompts/shared/."""
-    root = _find_repo_root()
-    path = root / "prompts" / "shared" / filename
-    if path.exists():
-        return path.read_text(encoding="utf-8")
-    return ""
-
-
-def _wrap_with_guards(
-    stage_prompt: str,
-    manifest_mode: str,
-    is_combine: bool = False,
-) -> str:
-    """Wrap stage prompt with auto-injected guard prefix and suffix.
-
-    Guard files live in prompts/shared/ and contain immutable output-format
-    and tone rules so the user can freely edit stage prompts without breaking
-    core behaviour.
-    """
-    prefix = _load_guard("guard-prefix.md")
-
-    if is_combine:
-        suffix = _load_guard("guard-suffix-combine.md")
-    elif manifest_mode == "single":
-        suffix = _load_guard("guard-suffix-single.md")
-    else:
-        suffix = _load_guard("guard-suffix-stages.md")
-
-    parts: list[str] = []
-    if prefix.strip():
-        parts.append(prefix.strip())
-        parts.append("\n\n---\n")
-    parts.append(stage_prompt.strip())
-    if suffix.strip():
-        parts.append("\n\n---\n")
-        parts.append(suffix.strip())
-
-    return "\n".join(parts)
-
-
 # ---------------------------------------------------------------------------
 # Architecture Engine
 # ---------------------------------------------------------------------------
@@ -494,8 +447,9 @@ def _execute_stage(
     max_context_chars: int,
 ) -> str:
     """Run a single stage: call ASU and return raw output."""
+    system_prompt = _build_layered_system_prompt(stage_prompt)
     user_prompt = build_user_prompt(stage_prompt, files, previous_outputs, max_context_chars)
-    return call_asu(config, SYSTEM_PROMPT, user_prompt)
+    return call_asu(config, system_prompt, user_prompt)
 
 
 def run_single(
@@ -518,7 +472,6 @@ def run_single(
         print(f"  Stage: {manifest.stages[0].label} (manifest prompt)")
     else:
         print(f"  Stage: Full Audit (.github/ccr-framework.md)")
-    stage_prompt = _wrap_with_guards(stage_prompt, manifest.mode)
     return _execute_stage(config, manifest.stages[0], stage_prompt, files, [], max_context_chars)
 
 
@@ -533,7 +486,6 @@ def run_sequential(
     previous: list[str] = []
     for i, stage in enumerate(manifest.stages):
         stage_prompt = load_stage_prompt(stage, prompt_root)
-        stage_prompt = _wrap_with_guards(stage_prompt, manifest.mode)
         print(f"  Stage {i + 1}/{len(manifest.stages)}: {stage.label}")
         try:
             output = _execute_stage(config, stage, stage_prompt, files, previous, max_context_chars)
@@ -556,7 +508,6 @@ def run_parallel(
 
     def _run_stage(index: int, stage: StageManifest) -> tuple[int, str]:
         stage_prompt = load_stage_prompt(stage, prompt_root)
-        stage_prompt = _wrap_with_guards(stage_prompt, manifest.mode)
         print(f"  Stage {index + 1}/{len(manifest.stages)}: {stage.label}")
         try:
             output = _execute_stage(config, stage, stage_prompt, files, [], max_context_chars)
@@ -582,7 +533,6 @@ def run_parallel(
 
     ordered_outputs = [stage_outputs[i] for i in sorted(stage_outputs.keys())]
     combine_prompt = load_stage_prompt(manifest.combine_stage, prompt_root)
-    combine_prompt = _wrap_with_guards(combine_prompt, manifest.mode, is_combine=True)
     print(f"  Combine stage: {manifest.combine_stage.label}")
     return _execute_stage(
         config, manifest.combine_stage, combine_prompt, files, ordered_outputs, max_context_chars

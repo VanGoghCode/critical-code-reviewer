@@ -1,5 +1,5 @@
 name: CCR Review
-description: Review PR changes with configurable prompt architectures and write CCR.md.
+description: Review PR changes with configurable prompt architectures and post inline review comments.
 author: GitHub Copilot
 inputs:
   api-key:
@@ -39,10 +39,6 @@ inputs:
     description: Directory that contains the architecture manifests and prompt files.
     required: false
     default: prompts
-  output-path:
-    description: Path where CCR.md should be written.
-    required: false
-    default: CCR.md
   base-ref:
     description: Base git ref or commit to diff against.
     required: false
@@ -74,8 +70,6 @@ inputs:
     required: false
     default: "120000"
 outputs:
-  report-path:
-    description: Absolute or workspace-relative path to the generated CCR.md file.
   summary:
     description: Concise summary extracted from the review output.
   risk-level:

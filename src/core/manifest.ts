@@ -19,6 +19,7 @@ const stageSchema = z.object({
   label: z.string().min(1),
   purpose: z.string().min(1),
   promptPath: z.string().min(1),
+  personaPath: z.string().min(1).optional(),
 });
 
 const manifestSchema = z
@@ -31,10 +32,10 @@ const manifestSchema = z
     combineStage: stageSchema.optional(),
   })
   .superRefine((manifest, context) => {
-    if (manifest.mode !== "parallel" && manifest.combineStage) {
+    if (manifest.mode === "single" && manifest.combineStage) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "combineStage is only valid for the parallel architecture",
+        message: "combineStage is not valid for the single architecture",
       });
     }
   });
@@ -68,9 +69,13 @@ async function loadStage(
   stage: PromptStageManifest,
 ): Promise<LoadedPromptStage> {
   const promptText = await readPromptText(promptRoot, stage.promptPath);
+  const personaText = stage.personaPath
+    ? await readPromptText(promptRoot, stage.personaPath)
+    : undefined;
   return {
     ...stage,
     promptText,
+    personaText,
   };
 }
 

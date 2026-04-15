@@ -1,4 +1,3 @@
-import path from "node:path";
 import * as core from "@actions/core";
 import { context } from "@actions/github";
 import {
@@ -148,7 +147,6 @@ async function main(): Promise<void> {
   try {
     const promptRoot = core.getInput("prompt-root") || "prompts";
     const architectureId = core.getInput("architecture") || "single-pass";
-    const outputPath = core.getInput("output-path") || "CCR.md";
     const includeGlobs = readCsvInput("include-globs", "**/*");
     const excludeGlobs = readCsvInput(
       "exclude-globs",
@@ -180,7 +178,7 @@ async function main(): Promise<void> {
       }
     });
 
-    const architecture = await loadArchitectureById(promptRoot, architectureId);
+    const architecture = await loadArchitectureById(promptRoot || "prompts", architectureId);
     const reviewContext = await collectReviewContext(repoRoot, {
       repositoryName:
         context.repo.owner && context.repo.repo
@@ -244,14 +242,10 @@ async function main(): Promise<void> {
       provider,
       logger,
       maxContextChars,
+      promptRoot: promptRoot || "prompts",
     });
 
-    const absoluteOutputPath = path.resolve(repoRoot, outputPath);
     await core.summary.addRaw(result.report.markdown).write();
-
-    const { mkdir, writeFile } = await import("node:fs/promises");
-    await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
-    await writeFile(absoluteOutputPath, result.report.markdown, "utf8");
 
     let inlineCommentsPosted = 0;
     let inlineCommentsSkipped = 0;
@@ -300,13 +294,7 @@ async function main(): Promise<void> {
               pullNumber: pullRequestNumber,
               commitId: getPullRequestHeadSha(),
               comments: inlineCommentResult.comments,
-              reviewBody: [
-                "CCR inline review comments",
-                "",
-                `Architecture: ${result.report.architectureLabel}`,
-                `Risk: ${result.report.riskLevel}`,
-                `Summary: ${result.report.summary}`,
-              ].join("\n"),
+              reviewBody: result.report.summary,
             });
 
             inlineCommentsPosted = publishResult.postedCount;
@@ -320,7 +308,6 @@ async function main(): Promise<void> {
       }
     }
 
-    core.setOutput("report-path", absoluteOutputPath);
     core.setOutput("summary", result.report.summary);
     core.setOutput("risk-level", result.report.riskLevel);
     core.setOutput("finding-count", String(result.report.findings.length));
@@ -328,7 +315,7 @@ async function main(): Promise<void> {
     core.setOutput("inline-comments-posted", String(inlineCommentsPosted));
     core.setOutput("inline-comments-skipped", String(inlineCommentsSkipped));
 
-    core.info(`CCR.md written to ${absoluteOutputPath}`);
+    core.info("CCR review completed.");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     core.setFailed(message);

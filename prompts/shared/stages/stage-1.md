@@ -31,5 +31,5 @@ Assess only the criteria in this dimension:
 Evaluate the provided system, dataset, model, or change request.
 
 [STATE PRESERVATION REQUIREMENTS]
-- This is the first stage, so create a complete baseline record that will be passed to later stages. Preserve all material details, evidence, judgments, consequences, and remediation steps in a structured form so nothing is lost downstream.
-- Begin the response with a clearly labeled section titled "Cumulative Context" containing the full current stage output in a durable, reusable format for subsequent stages.
+- If previousOutputs are provided, carry them forward in a clearly labeled "Cumulative Context" section at the start of your response.
+- This is the first analysis stage for this dimension, so create a complete baseline record in a durable, reusable format for subsequent stages.

@@ -5,10 +5,6 @@ import type {
   ReviewSeverity,
 } from "./types.js";
 
-const MAX_INLINE_TITLE_CHARS = 90;
-const MAX_INLINE_DETAIL_CHARS = 220;
-const MAX_INLINE_SUGGESTION_CHARS = 180;
-
 const SEVERITY_PRIORITY: Record<ReviewSeverity, number> = {
   high: 3,
   medium: 2,
@@ -79,28 +75,11 @@ function normalizePath(pathValue: string): string {
   return pathValue.replaceAll("\\", "/").trim().toLowerCase();
 }
 
-function clampText(value: string, maxLength: number): string {
-  if (value.length <= maxLength) {
-    return value;
-  }
-
-  return `${value.slice(0, Math.max(1, maxLength - 3)).trimEnd()}...`;
-}
-
 function formatInlineCommentBody(finding: ReviewFinding): string {
-  const lines = [
-    `[${finding.severity.toUpperCase()}] ${clampText(finding.title.trim(), MAX_INLINE_TITLE_CHARS)}`,
-    clampText(finding.detail.trim(), MAX_INLINE_DETAIL_CHARS),
-  ];
-
-  const recommendation = finding.recommendation ?? finding.suggestion;
-  if (recommendation && recommendation.trim().length > 0) {
-    lines.push(
-      `Suggestion: ${clampText(recommendation.trim(), MAX_INLINE_SUGGESTION_CHARS)}`,
-    );
-  }
-
-  return lines.join("\n");
+  // Output the detail text directly — no severity prefix, no truncation,
+  // no "Suggestion:" label. The LLM is instructed to keep each detail
+  // to 20-40 words (max 60) including any recommendation.
+  return finding.detail.trim();
 }
 
 function sortBySeverity(findings: ReviewFinding[]): ReviewFinding[] {

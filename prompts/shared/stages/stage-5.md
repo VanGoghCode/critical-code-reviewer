@@ -41,5 +41,6 @@ Assess only the criteria in this dimension:
 Evaluate the provided model outputs, analytics, decision workflow, UI, or change request.
 
 [STATE PRESERVATION REQUIREMENTS]
-- Treat all previous stage outputs as mandatory persistent context. Preserve all earlier evidence, determinations, and remediation items so the cumulative audit remains complete and no previously surfaced issue is lost.
-- Begin the response with a clearly labeled section titled "Cumulative Context" that carries forward all prior stage outputs in preserved structured form, then add this stage’s findings and recommendations.
+- If previousOutputs are provided, treat them as mandatory persistent context. Do not omit or lose any prior evidence, judgments, or recommendations.
+- Begin your response with a clearly labeled "Cumulative Context" section containing all prior outputs in structured form, then add your analysis.
+- If no previousOutputs are provided, proceed directly with your analysis — other stages are running independently and will be merged later.

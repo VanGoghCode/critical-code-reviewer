@@ -1,44 +1,57 @@
 {
   "id": "iterative",
   "label": "Iterative Chain",
-  "description": "Six fairness and governance dimensions run sequentially, each preserving cumulative audit context from previous stages.",
+  "description": "Six fairness and governance dimensions run sequentially, each preserving cumulative audit context from previous stages, followed by a consolidation step that merges and deduplicates all findings.",
   "mode": "sequential",
   "stages": [
     {
       "id": "stage-1",
       "label": "Data Fairness",
       "purpose": "Assess fair and representative training and evaluation data coverage, group definitions, and group-wise fairness targets.",
-      "promptPath": "shared/stages/stage-1.md"
+      "promptPath": "shared/stages/stage-1.md",
+      "personaPath": "shared/stages/stage-1-persona.md"
     },
     {
       "id": "stage-2",
       "label": "Adaptive Progression Integrity",
       "purpose": "Evaluate adaptive fairness, early-warning threshold validation, progression transparency, and pedagogical constraints.",
-      "promptPath": "shared/stages/stage-2.md"
+      "promptPath": "shared/stages/stage-2.md",
+      "personaPath": "shared/stages/stage-2-persona.md"
     },
     {
       "id": "stage-3",
       "label": "Protected Attribute Governance",
       "purpose": "Audit protected-attribute and proxy handling, fairness mitigation validation, and separation between decisioning and fairness-evaluation paths.",
-      "promptPath": "shared/stages/stage-3.md"
+      "promptPath": "shared/stages/stage-3.md",
+      "personaPath": "shared/stages/stage-3-persona.md"
     },
     {
       "id": "stage-4",
       "label": "Cultural and Accessibility Equity",
       "purpose": "Review cultural inclusivity, non-exclusionary language, and accessibility support in learner-facing code and interfaces.",
-      "promptPath": "shared/stages/stage-4.md"
+      "promptPath": "shared/stages/stage-4.md",
+      "personaPath": "shared/stages/stage-4-persona.md"
     },
     {
       "id": "stage-5",
       "label": "Explainability and Human Oversight",
       "purpose": "Evaluate AI output explainability, analytics claim validity, prediction-use alignment, contestability, and review safeguards.",
-      "promptPath": "shared/stages/stage-5.md"
+      "promptPath": "shared/stages/stage-5.md",
+      "personaPath": "shared/stages/stage-5-persona.md"
     },
     {
       "id": "stage-6",
       "label": "Privacy and Consent",
       "purpose": "Assess learner privacy protection with consent checks, revocation handling, access controls, and compliance-oriented safeguards.",
-      "promptPath": "shared/stages/stage-6.md"
+      "promptPath": "shared/stages/stage-6.md",
+      "personaPath": "shared/stages/stage-6-persona.md"
     }
-  ]
+  ],
+  "combineStage": {
+    "id": "combine",
+    "label": "Combine",
+    "purpose": "Consolidate all cumulative stage outputs into one complete, deduplicated, audit-ready JSON review object.",
+    "promptPath": "architectures/iterative/combine.md",
+    "personaPath": "architectures/iterative/combine-persona.md"
+  }
 }

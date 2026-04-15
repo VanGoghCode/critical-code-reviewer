@@ -53,15 +53,20 @@ export async function publishInlineReview(
     };
   }
 
-  const octokit = github.getOctokit(params.githubToken);
-  const existingCommentsResponse = await octokit.rest.pulls.listReviewComments({
-    owner: params.owner,
-    repo: params.repo,
-    pull_number: params.pullNumber,
-    per_page: 100,
+  const octokit = github.getOctokit(params.githubToken, {
+    request: { timeout: 30_000 },
   });
+  const existingComments = await octokit.paginate(
+    octokit.rest.pulls.listReviewComments,
+    {
+      owner: params.owner,
+      repo: params.repo,
+      pull_number: params.pullNumber,
+      per_page: 100,
+    },
+  );
   const existingCommentKeys = new Set<string>();
-  for (const comment of existingCommentsResponse.data) {
+  for (const comment of existingComments) {
     if (
       typeof comment.path !== "string" ||
       typeof comment.line !== "number" ||

@@ -82,6 +82,30 @@ function parseAsuAimlResponse(rawBody: string): ReviewProviderResult {
   );
 }
 
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 2000;
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+function getRetryDelayMs(attempt: number, response?: Response): number {
+  if (response?.headers) {
+    const retryAfter = response.headers.get("Retry-After");
+    if (retryAfter) {
+      const parsed = Number.parseInt(retryAfter, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed * 1000;
+      }
+    }
+  }
+
+  return RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+}
+
+function waitForDelay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
 export async function requestAsuAimlChatCompletion(
   config: AsuAimlProviderConfig,
   messages: ReviewProviderMessage[],
@@ -103,31 +127,63 @@ export async function requestAsuAimlChatCompletion(
     body.model_provider = config.modelProvider;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  let lastError: Error | undefined;
 
-  try {
-    const response = await fetch(config.baseUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+  for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
-    const rawBody = await response.text();
-    if (!response.ok) {
-      throw new Error(
-        `ASU AIML request failed with status ${response.status}: ${rawBody}`,
-      );
+    try {
+      const response = await fetch(config.baseUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      const rawBody = await response.text();
+
+      if (!response.ok) {
+        if (
+          RETRYABLE_STATUS_CODES.has(response.status) &&
+          attempt < MAX_RETRY_ATTEMPTS - 1
+        ) {
+          const delayMs = getRetryDelayMs(attempt, response);
+          await waitForDelay(delayMs);
+          continue;
+        }
+
+        throw new Error(
+          `ASU AIML request failed with status ${response.status}: ${rawBody}`,
+        );
+      }
+
+      return parseAsuAimlResponse(rawBody);
+    } catch (error) {
+      const isAbort = error instanceof DOMException && error.name === "AbortError";
+      if (isAbort) {
+        throw new Error(
+          `ASU AIML request timed out after ${config.timeoutMs}ms.`,
+        );
+      }
+
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+        const delayMs = getRetryDelayMs(attempt);
+        await waitForDelay(delayMs);
+      }
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return parseAsuAimlResponse(rawBody);
-  } finally {
-    clearTimeout(timeout);
   }
+
+  throw new Error(
+    `ASU AIML request failed after ${MAX_RETRY_ATTEMPTS} attempts: ${lastError?.message ?? "unknown error"}`,
+  );
 }
 
 export function createAsuAimlProvider(

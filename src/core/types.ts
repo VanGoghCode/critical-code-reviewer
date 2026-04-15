@@ -38,6 +38,7 @@ export interface PromptStageManifest {
   label: string;
   purpose: string;
   promptPath: string;
+  personaPath?: string;
 }
 
 export interface PromptArchitectureManifest {
@@ -51,6 +52,7 @@ export interface PromptArchitectureManifest {
 
 export interface LoadedPromptStage extends PromptStageManifest {
   promptText: string;
+  personaText?: string;
 }
 
 export interface LoadedPromptArchitecture

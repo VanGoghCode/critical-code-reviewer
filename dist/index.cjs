@@ -995,14 +995,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol}//${url.hostname}:${port}`;
-        let path5 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path4 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin.endsWith("/")) {
           origin = origin.substring(0, origin.length - 1);
         }
-        if (path5 && !path5.startsWith("/")) {
-          path5 = `/${path5}`;
+        if (path4 && !path4.startsWith("/")) {
+          path4 = `/${path4}`;
         }
-        url = new URL(origin + path5);
+        url = new URL(origin + path4);
       }
       return url;
     }
@@ -2616,20 +2616,20 @@ var require_parseParams = __commonJS({
 var require_basename = __commonJS({
   "node_modules/@fastify/busboy/lib/utils/basename.js"(exports2, module2) {
     "use strict";
-    module2.exports = function basename(path5) {
-      if (typeof path5 !== "string") {
+    module2.exports = function basename(path4) {
+      if (typeof path4 !== "string") {
         return "";
       }
-      for (var i = path5.length - 1; i >= 0; --i) {
-        switch (path5.charCodeAt(i)) {
+      for (var i = path4.length - 1; i >= 0; --i) {
+        switch (path4.charCodeAt(i)) {
           case 47:
           // '/'
           case 92:
-            path5 = path5.slice(i + 1);
-            return path5 === ".." || path5 === "." ? "" : path5;
+            path4 = path4.slice(i + 1);
+            return path4 === ".." || path4 === "." ? "" : path4;
         }
       }
-      return path5 === ".." || path5 === "." ? "" : path5;
+      return path4 === ".." || path4 === "." ? "" : path4;
     };
   }
 });
@@ -5659,7 +5659,7 @@ var require_request = __commonJS({
     }
     var Request = class _Request {
       constructor(origin, {
-        path: path5,
+        path: path4,
         method,
         body,
         headers,
@@ -5673,11 +5673,11 @@ var require_request = __commonJS({
         throwOnError,
         expectContinue
       }, handler) {
-        if (typeof path5 !== "string") {
+        if (typeof path4 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path5[0] !== "/" && !(path5.startsWith("http://") || path5.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path4[0] !== "/" && !(path4.startsWith("http://") || path4.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.exec(path5) !== null) {
+        } else if (invalidPathRegex.exec(path4) !== null) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -5740,7 +5740,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? util2.buildURL(path5, query) : path5;
+        this.path = query ? util2.buildURL(path4, query) : path4;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6748,9 +6748,9 @@ var require_RedirectHandler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util2.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path5 = search ? `${pathname}${search}` : pathname;
+        const path4 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path5;
+        this.opts.path = path4;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -7990,7 +7990,7 @@ var require_client = __commonJS({
         writeH2(client, client[kHTTP2Session], request);
         return;
       }
-      const { body, method, path: path5, host, upgrade, headers, blocking, reset } = request;
+      const { body, method, path: path4, host, upgrade, headers, blocking, reset } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
         body.read(0);
@@ -8040,7 +8040,7 @@ var require_client = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path5} HTTP/1.1\r
+      let header = `${method} ${path4} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -8103,7 +8103,7 @@ upgrade: ${upgrade}\r
       return true;
     }
     function writeH2(client, session, request) {
-      const { body, method, path: path5, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { body, method, path: path4, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let headers;
       if (typeof reqHeaders === "string") headers = Request[kHTTP2CopyHeaders](reqHeaders.trim());
       else headers = reqHeaders;
@@ -8146,7 +8146,7 @@ upgrade: ${upgrade}\r
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path5;
+      headers[HTTP2_HEADER_PATH] = path4;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -10386,20 +10386,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path5) {
-      if (typeof path5 !== "string") {
-        return path5;
+    function safeUrl(path4) {
+      if (typeof path4 !== "string") {
+        return path4;
       }
-      const pathSegments = path5.split("?");
+      const pathSegments = path4.split("?");
       if (pathSegments.length !== 2) {
-        return path5;
+        return path4;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path5, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path5);
+    function matchKey(mockDispatch2, { path: path4, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path4);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10417,7 +10417,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path5 }) => matchValue(safeUrl(path5), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path4 }) => matchValue(safeUrl(path4), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10454,9 +10454,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path5, method, body, headers, query } = opts;
+      const { path: path4, method, body, headers, query } = opts;
       return {
-        path: path5,
+        path: path4,
         method,
         body,
         headers,
@@ -10905,10 +10905,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path5, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path4, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path5,
+            Path: path4,
             "Status code": statusCode,
             Persistent: persist ? "\u2705" : "\u274C",
             Invocations: timesInvoked,
@@ -15528,8 +15528,8 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path5) {
-      for (const char of path5) {
+    function validateCookiePath(path4) {
+      for (const char of path4) {
         const code = char.charCodeAt(0);
         if (code < 33 || char === ";") {
           throw new Error("Invalid cookie path");
@@ -17209,11 +17209,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path5 = opts.path;
+          let path4 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path5 = `/${path5}`;
+            path4 = `/${path4}`;
           }
-          url = new URL(util2.parseOrigin(url).origin + path5);
+          url = new URL(util2.parseOrigin(url).origin + path4);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -18436,7 +18436,7 @@ var require_path_utils = __commonJS({
     };
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.toPlatformPath = exports2.toWin32Path = exports2.toPosixPath = void 0;
-    var path5 = __importStar(require("path"));
+    var path4 = __importStar(require("path"));
     function toPosixPath(pth) {
       return pth.replace(/[\\]/g, "/");
     }
@@ -18446,7 +18446,7 @@ var require_path_utils = __commonJS({
     }
     exports2.toWin32Path = toWin32Path;
     function toPlatformPath(pth) {
-      return pth.replace(/[/\\]/g, path5.sep);
+      return pth.replace(/[/\\]/g, path4.sep);
     }
     exports2.toPlatformPath = toPlatformPath;
   }
@@ -18510,7 +18510,7 @@ var require_io_util = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.getCmdPath = exports2.tryGetExecutablePath = exports2.isRooted = exports2.isDirectory = exports2.exists = exports2.READONLY = exports2.UV_FS_O_EXLOCK = exports2.IS_WINDOWS = exports2.unlink = exports2.symlink = exports2.stat = exports2.rmdir = exports2.rm = exports2.rename = exports2.readlink = exports2.readdir = exports2.open = exports2.mkdir = exports2.lstat = exports2.copyFile = exports2.chmod = void 0;
     var fs = __importStar(require("fs"));
-    var path5 = __importStar(require("path"));
+    var path4 = __importStar(require("path"));
     _a = fs.promises, exports2.chmod = _a.chmod, exports2.copyFile = _a.copyFile, exports2.lstat = _a.lstat, exports2.mkdir = _a.mkdir, exports2.open = _a.open, exports2.readdir = _a.readdir, exports2.readlink = _a.readlink, exports2.rename = _a.rename, exports2.rm = _a.rm, exports2.rmdir = _a.rmdir, exports2.stat = _a.stat, exports2.symlink = _a.symlink, exports2.unlink = _a.unlink;
     exports2.IS_WINDOWS = process.platform === "win32";
     exports2.UV_FS_O_EXLOCK = 268435456;
@@ -18559,7 +18559,7 @@ var require_io_util = __commonJS({
         }
         if (stats && stats.isFile()) {
           if (exports2.IS_WINDOWS) {
-            const upperExt = path5.extname(filePath).toUpperCase();
+            const upperExt = path4.extname(filePath).toUpperCase();
             if (extensions.some((validExt) => validExt.toUpperCase() === upperExt)) {
               return filePath;
             }
@@ -18583,11 +18583,11 @@ var require_io_util = __commonJS({
           if (stats && stats.isFile()) {
             if (exports2.IS_WINDOWS) {
               try {
-                const directory = path5.dirname(filePath);
-                const upperName = path5.basename(filePath).toUpperCase();
+                const directory = path4.dirname(filePath);
+                const upperName = path4.basename(filePath).toUpperCase();
                 for (const actualName of yield exports2.readdir(directory)) {
                   if (upperName === actualName.toUpperCase()) {
-                    filePath = path5.join(directory, actualName);
+                    filePath = path4.join(directory, actualName);
                     break;
                   }
                 }
@@ -18682,7 +18682,7 @@ var require_io = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.findInPath = exports2.which = exports2.mkdirP = exports2.rmRF = exports2.mv = exports2.cp = void 0;
     var assert_1 = require("assert");
-    var path5 = __importStar(require("path"));
+    var path4 = __importStar(require("path"));
     var ioUtil = __importStar(require_io_util());
     function cp(source, dest, options = {}) {
       return __awaiter(this, void 0, void 0, function* () {
@@ -18691,7 +18691,7 @@ var require_io = __commonJS({
         if (destStat && destStat.isFile() && !force) {
           return;
         }
-        const newDest = destStat && destStat.isDirectory() && copySourceDirectory ? path5.join(dest, path5.basename(source)) : dest;
+        const newDest = destStat && destStat.isDirectory() && copySourceDirectory ? path4.join(dest, path4.basename(source)) : dest;
         if (!(yield ioUtil.exists(source))) {
           throw new Error(`no such file or directory: ${source}`);
         }
@@ -18703,7 +18703,7 @@ var require_io = __commonJS({
             yield cpDirRecursive(source, newDest, 0, force);
           }
         } else {
-          if (path5.relative(source, newDest) === "") {
+          if (path4.relative(source, newDest) === "") {
             throw new Error(`'${newDest}' and '${source}' are the same file`);
           }
           yield copyFile(source, newDest, force);
@@ -18716,7 +18716,7 @@ var require_io = __commonJS({
         if (yield ioUtil.exists(dest)) {
           let destExists = true;
           if (yield ioUtil.isDirectory(dest)) {
-            dest = path5.join(dest, path5.basename(source));
+            dest = path4.join(dest, path4.basename(source));
             destExists = yield ioUtil.exists(dest);
           }
           if (destExists) {
@@ -18727,7 +18727,7 @@ var require_io = __commonJS({
             }
           }
         }
-        yield mkdirP(path5.dirname(dest));
+        yield mkdirP(path4.dirname(dest));
         yield ioUtil.rename(source, dest);
       });
     }
@@ -18790,7 +18790,7 @@ var require_io = __commonJS({
         }
         const extensions = [];
         if (ioUtil.IS_WINDOWS && process.env["PATHEXT"]) {
-          for (const extension of process.env["PATHEXT"].split(path5.delimiter)) {
+          for (const extension of process.env["PATHEXT"].split(path4.delimiter)) {
             if (extension) {
               extensions.push(extension);
             }
@@ -18803,12 +18803,12 @@ var require_io = __commonJS({
           }
           return [];
         }
-        if (tool.includes(path5.sep)) {
+        if (tool.includes(path4.sep)) {
           return [];
         }
         const directories = [];
         if (process.env.PATH) {
-          for (const p of process.env.PATH.split(path5.delimiter)) {
+          for (const p of process.env.PATH.split(path4.delimiter)) {
             if (p) {
               directories.push(p);
             }
@@ -18816,7 +18816,7 @@ var require_io = __commonJS({
         }
         const matches = [];
         for (const directory of directories) {
-          const filePath = yield ioUtil.tryGetExecutablePath(path5.join(directory, tool), extensions);
+          const filePath = yield ioUtil.tryGetExecutablePath(path4.join(directory, tool), extensions);
           if (filePath) {
             matches.push(filePath);
           }
@@ -18932,7 +18932,7 @@ var require_toolrunner = __commonJS({
     var os = __importStar(require("os"));
     var events = __importStar(require("events"));
     var child = __importStar(require("child_process"));
-    var path5 = __importStar(require("path"));
+    var path4 = __importStar(require("path"));
     var io = __importStar(require_io());
     var ioUtil = __importStar(require_io_util());
     var timers_1 = require("timers");
@@ -19147,7 +19147,7 @@ var require_toolrunner = __commonJS({
       exec() {
         return __awaiter(this, void 0, void 0, function* () {
           if (!ioUtil.isRooted(this.toolPath) && (this.toolPath.includes("/") || IS_WINDOWS && this.toolPath.includes("\\"))) {
-            this.toolPath = path5.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
+            this.toolPath = path4.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
           }
           this.toolPath = yield io.which(this.toolPath, true);
           return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
@@ -19647,7 +19647,7 @@ var require_core = __commonJS({
     var file_command_1 = require_file_command();
     var utils_1 = require_utils();
     var os = __importStar(require("os"));
-    var path5 = __importStar(require("path"));
+    var path4 = __importStar(require("path"));
     var oidc_utils_1 = require_oidc_utils();
     var ExitCode;
     (function(ExitCode2) {
@@ -19675,7 +19675,7 @@ var require_core = __commonJS({
       } else {
         (0, command_1.issueCommand)("add-path", {}, inputPath);
       }
-      process.env["PATH"] = `${inputPath}${path5.delimiter}${process.env["PATH"]}`;
+      process.env["PATH"] = `${inputPath}${path4.delimiter}${process.env["PATH"]}`;
     }
     exports2.addPath = addPath;
     function getInput2(name, options) {
@@ -19831,8 +19831,8 @@ var require_context = __commonJS({
           if ((0, fs_1.existsSync)(process.env.GITHUB_EVENT_PATH)) {
             this.payload = JSON.parse((0, fs_1.readFileSync)(process.env.GITHUB_EVENT_PATH, { encoding: "utf8" }));
           } else {
-            const path5 = process.env.GITHUB_EVENT_PATH;
-            process.stdout.write(`GITHUB_EVENT_PATH ${path5} does not exist${os_1.EOL}`);
+            const path4 = process.env.GITHUB_EVENT_PATH;
+            process.stdout.write(`GITHUB_EVENT_PATH ${path4} does not exist${os_1.EOL}`);
           }
         }
         this.eventName = process.env.GITHUB_EVENT_NAME;
@@ -24136,8 +24136,8 @@ var require_utils5 = __commonJS({
       }
       return output;
     };
-    exports2.basename = (path5, { windows } = {}) => {
-      const segs = path5.split(windows ? /[\\/]/ : "/");
+    exports2.basename = (path4, { windows } = {}) => {
+      const segs = path4.split(windows ? /[\\/]/ : "/");
       const last = segs[segs.length - 1];
       if (last === "") {
         return segs[segs.length - 2];
@@ -25632,13 +25632,12 @@ var require_picomatch2 = __commonJS({
 });
 
 // src/action.ts
-var import_node_path4 = __toESM(require("node:path"), 1);
 var core = __toESM(require_core(), 1);
 var import_github = __toESM(require_github(), 1);
 
 // src/core/api.ts
 var DEFAULT_ASU_BASE_URL = "https://api-main.aiml.asu.edu/queryV2";
-var DEFAULT_ASU_MODEL_PROVIDER = "asu";
+var DEFAULT_ASU_MODEL_PROVIDER = "openai";
 var DEFAULT_ASU_TEMPERATURE = 0.2;
 var DEFAULT_ASU_TIMEOUT_MS = 12e4;
 function normalizeOptionalString(value) {
@@ -26134,8 +26133,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path5, errorMaps, issueData } = params;
-  const fullPath = [...path5, ...issueData.path || []];
+  const { data, path: path4, errorMaps, issueData } = params;
+  const fullPath = [...path4, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -26251,11 +26250,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path5, key) {
+  constructor(parent, value, path4, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path5;
+    this._path = path4;
     this._key = key;
   }
   get path() {
@@ -29723,6 +29722,24 @@ function extractJsonCandidate(text) {
   if (fencedMatch?.[1]) {
     return fencedMatch[1].trim();
   }
+  const findingsPos = text.indexOf('"findings"');
+  if (findingsPos >= 0) {
+    const searchStart = Math.max(0, findingsPos - 500);
+    const firstBrace2 = text.indexOf("{", searchStart);
+    if (firstBrace2 >= 0 && firstBrace2 <= findingsPos) {
+      let depth = 0;
+      for (let i = firstBrace2; i < text.length; i += 1) {
+        if (text[i] === "{") {
+          depth += 1;
+        } else if (text[i] === "}") {
+          depth -= 1;
+          if (depth === 0) {
+            return text.slice(firstBrace2, i + 1).trim();
+          }
+        }
+      }
+    }
+  }
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
   if (firstBrace >= 0 && lastBrace > firstBrace) {
@@ -29796,10 +29813,7 @@ function renderReviewMarkdown(params) {
   ).join("\n");
   const notes = modelOutput.notes ?? [];
   const markdown = [
-    "# CCR.md",
-    "",
-    "### Prompt",
-    prompt.trim() || "- No prompt recorded.",
+    "# CCR Review Report",
     "",
     `## ${title}`,
     "",
@@ -29849,6 +29863,44 @@ function renderReviewMarkdown(params) {
     markdown,
     rawModelOutput: rawOutput
   };
+}
+
+// src/core/prompt-loader.ts
+var import_promises = require("node:fs/promises");
+var import_node_path = __toESM(require("node:path"), 1);
+var ACTION_ENTRY_FILE_PATTERN = /^index\.(cjs|js|mjs)$/;
+function resolveActionBundleRootFromEntry(entryPath) {
+  if (!entryPath) {
+    return void 0;
+  }
+  const normalizedEntryPath = import_node_path.default.resolve(entryPath);
+  const entryDir = import_node_path.default.dirname(normalizedEntryPath);
+  const entryName = import_node_path.default.basename(normalizedEntryPath);
+  if (import_node_path.default.basename(entryDir) !== "dist") {
+    return void 0;
+  }
+  if (!ACTION_ENTRY_FILE_PATTERN.test(entryName)) {
+    return void 0;
+  }
+  return import_node_path.default.resolve(entryDir, "..");
+}
+function resolvePromptRoot(promptRoot = "prompts", options) {
+  if (import_node_path.default.isAbsolute(promptRoot)) {
+    return promptRoot;
+  }
+  const githubActionPath = options?.githubActionPath ?? process.env.GITHUB_ACTION_PATH;
+  if (githubActionPath && githubActionPath.trim().length > 0) {
+    return import_node_path.default.resolve(githubActionPath, promptRoot);
+  }
+  const actionBundleRoot = resolveActionBundleRootFromEntry(
+    options?.entryPath ?? process.argv[1]
+  );
+  const baseDir = actionBundleRoot ?? options?.cwd ?? process.cwd();
+  return import_node_path.default.resolve(baseDir, promptRoot);
+}
+async function readPromptText(promptRoot, promptPath) {
+  const absolutePath = import_node_path.default.resolve(promptRoot, promptPath);
+  return (0, import_promises.readFile)(absolutePath, "utf8");
 }
 
 // src/core/engine.ts
@@ -29925,52 +29977,50 @@ function buildRequestEnvelope(request, previousOutputs, stageIndex, stageCount, 
     2
   );
 }
-function buildSystemMessage(architecture, stageLabel, stagePurpose, mode) {
-  return [
-    "You are CCR, a code review engine that must return valid JSON only.",
-    `Architecture: ${architecture.label} (${architecture.id}).`,
-    `Mode: ${mode}.`,
-    `Current stage: ${stageLabel}.`,
-    `Stage purpose: ${stagePurpose}.`,
-    "Return a JSON object with the following keys: summary, riskLevel, findings, todos, notes.",
-    "Risk level must be one of low, medium, or high.",
-    "Findings should be an array of objects with severity, title, detail, optional file, optional line, optional endLine, and optional recommendation or suggestion fields.",
-    "When a finding maps to a changed file, set file and line to an exact changed-line anchor in the head revision.",
-    "When a finding spans a changed block, set line to the first changed line and endLine to the last changed line in that block.",
-    "Use reviewContext.commitMessages to understand intent and flag mismatches between commit intent and code changes.",
-    "Keep detail and recommendation concise so each finding can be posted as a short inline review comment.",
-    "If previousOutputsParsed is present, use it as the authoritative previous-stage context to avoid escaped JSON artifacts.",
-    "Do not wrap the JSON in Markdown fences."
-  ].join("\n");
+async function loadSharedLayers(promptRoot) {
+  const [persona, humanize, outputFormat] = await Promise.all([
+    readPromptText(promptRoot, "shared/persona.md"),
+    readPromptText(promptRoot, "shared/humanize.md"),
+    readPromptText(promptRoot, "shared/output-format.md")
+  ]);
+  return { persona, humanize, outputFormat };
 }
 function createMessages(params) {
-  const messages = [
-    {
-      role: "system",
-      content: buildSystemMessage(
-        params.architecture,
-        params.stageLabel,
-        params.stagePurpose,
-        params.mode
-      )
-    }
-  ];
-  if (params.promptText.trim().length > 0) {
-    messages.push({
-      role: "system",
-      content: params.promptText.trim()
-    });
-  }
+  const messages = [];
   messages.push({
-    role: "user",
-    content: buildRequestEnvelope(
-      params.request,
-      params.previousOutputs,
-      params.stageIndex,
-      params.stageCount,
-      params.maxContextChars
-    )
+    role: "system",
+    content: [
+      "You are a code reviewer.",
+      `Architecture: ${params.architecture.label} (${params.architecture.id}).`,
+      `Mode: ${params.mode}.`,
+      `Current stage: ${params.stageLabel}.`,
+      `Stage purpose: ${params.stagePurpose}.`
+    ].join("\n")
   });
+  const persona = (params.stagePersona ?? params.sharedLayers.persona).trim();
+  if (persona.length > 0) {
+    messages.push({ role: "system", content: persona });
+  }
+  const promptText = params.promptText.trim();
+  if (promptText.length > 0) {
+    messages.push({ role: "system", content: promptText });
+  }
+  const humanize = params.sharedLayers.humanize.trim();
+  if (humanize.length > 0) {
+    messages.push({ role: "system", content: humanize });
+  }
+  const envelope = buildRequestEnvelope(
+    params.request,
+    params.previousOutputs,
+    params.stageIndex,
+    params.stageCount,
+    params.maxContextChars
+  );
+  const outputFormat = params.sharedLayers.outputFormat.trim();
+  const userContent = outputFormat.length > 0 ? `${envelope}
+
+${outputFormat}` : envelope;
+  messages.push({ role: "user", content: userContent });
   return messages;
 }
 function estimateTokensFromText(value) {
@@ -30046,11 +30096,17 @@ async function executeStage(params) {
     stageLabel: params.stage.label,
     stagePurpose: params.stage.purpose,
     promptText: params.stage.promptText,
+    stagePersona: params.stage.personaText,
     request: params.request,
     previousOutputs: params.previousOutputs,
     mode: params.mode,
-    maxContextChars: params.maxContextChars
+    maxContextChars: params.maxContextChars,
+    sharedLayers: params.sharedLayers
   });
+  const loggableMessages = messages.map((message) => ({
+    role: message.role,
+    contentLength: message.content.length
+  }));
   params.logger.info("Executing review stage", {
     stageId: params.stage.id,
     stageLabel: params.stage.label,
@@ -30059,8 +30115,7 @@ async function executeStage(params) {
     stageCount: params.stageCount,
     stageStatus: "started",
     mode: params.mode,
-    promptMessages: messages
-    // Log exact prompt sent to LLM
+    promptMessages: loggableMessages
   });
   const stageStartedAtMs = Date.now();
   const rawResult = await params.provider.review({
@@ -30087,6 +30142,7 @@ async function runReviewArchitecture(params) {
   const { architecture, request, provider, logger } = params;
   const runStartedAtMs = Date.now();
   const maxContextChars = params.maxContextChars ?? 12e3;
+  const sharedLayers = params.sharedLayers ?? await loadSharedLayers(params.promptRoot ?? "prompts");
   logger.info("Starting review run", {
     architectureId: architecture.id,
     mode: architecture.mode,
@@ -30106,7 +30162,8 @@ async function runReviewArchitecture(params) {
       provider,
       logger,
       mode: architecture.mode,
-      maxContextChars
+      maxContextChars,
+      sharedLayers
     });
     stageOutputs.push(stageResult);
     const modelOutput2 = parseReviewModelOutput(stageResult.output);
@@ -30130,7 +30187,6 @@ async function runReviewArchitecture(params) {
     };
   }
   if (architecture.mode === "sequential") {
-    let previousStageOutput;
     for (const [index, stage] of architecture.stages.entries()) {
       const result = await executeStage({
         architecture,
@@ -30138,14 +30194,49 @@ async function runReviewArchitecture(params) {
         stageCount,
         stage,
         request,
-        previousOutputs: previousStageOutput ? [previousStageOutput] : [],
+        previousOutputs: stageOutputs.map((s) => s.output),
         provider,
         logger,
         mode: architecture.mode,
-        maxContextChars
+        maxContextChars,
+        sharedLayers
       });
       stageOutputs.push(result);
-      previousStageOutput = result.output;
+    }
+    if (architecture.combineStage) {
+      const combineResult2 = await executeStage({
+        architecture,
+        stageIndex: architecture.stages.length,
+        stageCount,
+        stage: architecture.combineStage,
+        request,
+        previousOutputs: stageOutputs.map((entry) => entry.output),
+        provider,
+        logger,
+        mode: architecture.mode,
+        maxContextChars,
+        sharedLayers
+      });
+      stageOutputs.push(combineResult2);
+      const modelOutput3 = parseReviewModelOutput(combineResult2.output);
+      const report3 = renderReviewMarkdown({
+        architecture,
+        request,
+        modelOutput: modelOutput3,
+        stageOutputs,
+        rawOutput: combineResult2.output,
+        prompt: combineResult2.prompt
+      });
+      logger.info("Review run completed", {
+        architectureId: architecture.id,
+        findingCount: report3.findings.length,
+        riskLevel: report3.riskLevel
+      });
+      return {
+        report: report3,
+        stageOutputs,
+        metrics: aggregateRunMetrics(runStartedAtMs, stageOutputs)
+      };
     }
     const finalStageResult = stageOutputs.at(-1);
     if (!finalStageResult) {
@@ -30196,7 +30287,8 @@ async function runReviewArchitecture(params) {
         provider,
         logger,
         mode: architecture.mode,
-        maxContextChars
+        maxContextChars,
+        sharedLayers
       });
     })
   );
@@ -30204,7 +30296,7 @@ async function runReviewArchitecture(params) {
   const combineStage = architecture.combineStage;
   if (!combineStage) {
     throw new Error(
-      `Parallel architecture ${architecture.id} is missing a combine stage.`
+      `Parallel architecture requires a combine stage.`
     );
   }
   const combineResult = await executeStage({
@@ -30217,7 +30309,8 @@ async function runReviewArchitecture(params) {
     provider,
     logger,
     mode: architecture.mode,
-    maxContextChars
+    maxContextChars,
+    sharedLayers
   });
   stageOutputs.push(combineResult);
   const modelOutput = parseReviewModelOutput(combineResult.output);
@@ -30243,8 +30336,8 @@ async function runReviewArchitecture(params) {
 
 // src/core/git.ts
 var import_node_child_process = require("node:child_process");
-var import_promises = require("node:fs/promises");
-var import_node_path = __toESM(require("node:path"), 1);
+var import_promises2 = require("node:fs/promises");
+var import_node_path2 = __toESM(require("node:path"), 1);
 var import_node_util = require("node:util");
 var github = __toESM(require_github(), 1);
 var import_picomatch = __toESM(require_picomatch2(), 1);
@@ -30253,6 +30346,7 @@ var COMMIT_FIELD_SEPARATOR = "";
 var COMMIT_RECORD_SEPARATOR = "";
 var DEFAULT_MAX_COMMIT_MESSAGES = 20;
 var DEFAULT_MAX_COMMIT_MESSAGE_CHARS = 400;
+var MAX_FILE_SIZE_BYTES = 1e6;
 function splitStatusLine(line) {
   const parts = line.split("	");
   const status = parts[0] ?? "M";
@@ -30299,8 +30393,18 @@ function normalizePullRequestStatus(status) {
   return "modified";
 }
 function fileLanguage(filePath) {
-  const extension = import_node_path.default.extname(filePath).toLowerCase();
-  const mapping = {
+  const extension = import_node_path2.default.extname(filePath).toLowerCase();
+  const basename = import_node_path2.default.basename(filePath).toLowerCase();
+  const nameMapping = {
+    dockerfile: "dockerfile",
+    makefile: "makefile",
+    rakefile: "ruby",
+    gemfile: "ruby"
+  };
+  if (nameMapping[basename]) {
+    return nameMapping[basename];
+  }
+  const extensionMapping = {
     ".ts": "typescript",
     ".tsx": "tsx",
     ".js": "javascript",
@@ -30312,10 +30416,58 @@ function fileLanguage(filePath) {
     ".yml": "yaml",
     ".yaml": "yaml",
     ".css": "css",
+    ".scss": "scss",
+    ".less": "less",
     ".html": "html",
-    ".sh": "shell"
+    ".sh": "shell",
+    ".bash": "shell",
+    ".zsh": "shell",
+    ".py": "python",
+    ".go": "go",
+    ".java": "java",
+    ".rb": "ruby",
+    ".rs": "rust",
+    ".cs": "csharp",
+    ".fs": "fsharp",
+    ".swift": "swift",
+    ".kt": "kotlin",
+    ".kts": "kotlin",
+    ".scala": "scala",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".hxx": "cpp",
+    ".php": "php",
+    ".sql": "sql",
+    ".xml": "xml",
+    ".toml": "toml",
+    ".ini": "ini",
+    ".cfg": "ini",
+    ".conf": "ini",
+    ".gradle": "groovy",
+    ".groovy": "groovy",
+    ".lua": "lua",
+    ".r": "r",
+    ".R": "r",
+    ".dart": "dart",
+    ".ex": "elixir",
+    ".exs": "elixir",
+    ".erl": "erlang",
+    ".hrl": "erlang",
+    ".hs": "haskell",
+    ".ml": "ocaml",
+    ".mli": "ocaml",
+    ".vue": "vue",
+    ".svelte": "svelte",
+    ".tf": "hcl",
+    ".proto": "protobuf",
+    ".graphql": "graphql",
+    ".gql": "graphql"
   };
-  return mapping[extension];
+  return extensionMapping[extension];
 }
 async function runGit(repositoryRoot, args) {
   const { stdout } = await execFileAsync("git", args, {
@@ -30388,12 +30540,12 @@ function filterReviewPaths(paths, includeGlobs, excludeGlobs) {
   });
 }
 async function readFileAtRef(repositoryRoot, ref, filePath) {
-  const relativePath = filePath.replaceAll(import_node_path.default.sep, "/");
+  const relativePath = filePath.replaceAll(import_node_path2.default.sep, "/");
   try {
     return await runGit(repositoryRoot, ["show", `${ref}:${relativePath}`]);
   } catch {
-    const diskPath = import_node_path.default.resolve(repositoryRoot, filePath);
-    return (0, import_promises.readFile)(diskPath, "utf8");
+    const diskPath = import_node_path2.default.resolve(repositoryRoot, filePath);
+    return (0, import_promises2.readFile)(diskPath, "utf8");
   }
 }
 async function readRepositoryFileFromGitHubRef(params) {
@@ -30406,6 +30558,9 @@ async function readRepositoryFileFromGitHubRef(params) {
     });
     const data = response.data;
     if (Array.isArray(data) || data.type !== "file") {
+      return "";
+    }
+    if (typeof data.size === "number" && data.size > MAX_FILE_SIZE_BYTES) {
       return "";
     }
     if (typeof data.content !== "string") {
@@ -30430,7 +30585,7 @@ async function resolveGitRange(repositoryRoot, context2, fallbackHead = "HEAD") 
     const eventName = process.env.GITHUB_EVENT_NAME ?? "";
     const eventPath = process.env.GITHUB_EVENT_PATH;
     if ((eventName === "pull_request" || eventName === "pull_request_target") && eventPath) {
-      const eventPayload = JSON.parse(await (0, import_promises.readFile)(eventPath, "utf8"));
+      const eventPayload = JSON.parse(await (0, import_promises2.readFile)(eventPath, "utf8"));
       const baseSha = eventPayload.pull_request?.base?.sha;
       const headSha = eventPayload.pull_request?.head?.sha;
       if (baseSha && headSha) {
@@ -30474,13 +30629,13 @@ async function collectReviewFiles(options) {
   );
   const files = [];
   for (const record of selectedRecords) {
-    const absolutePath = import_node_path.default.resolve(repositoryRoot, record.path);
+    const absolutePath = import_node_path2.default.resolve(repositoryRoot, record.path);
     const normalizedStatus = normalizeStatus(record.status);
     let content = "";
     if (normalizedStatus === "deleted") {
       content = await readFileAtRef(repositoryRoot, range.baseRef, record.path);
     } else {
-      content = await (0, import_promises.readFile)(absolutePath, "utf8");
+      content = await (0, import_promises2.readFile)(absolutePath, "utf8");
     }
     const patch = await runGit(repositoryRoot, [
       "diff",
@@ -30492,7 +30647,7 @@ async function collectReviewFiles(options) {
     files.push({
       path: record.path,
       previousPath: record.previousPath,
-      name: import_node_path.default.basename(record.path),
+      name: import_node_path2.default.basename(record.path),
       content,
       status: normalizedStatus,
       language: fileLanguage(record.path),
@@ -30513,7 +30668,9 @@ async function collectPullRequestReviewFiles(options) {
     excludeGlobs,
     maxFiles = 25
   } = options;
-  const octokit = github.getOctokit(githubToken);
+  const octokit = github.getOctokit(githubToken, {
+    request: { timeout: 3e4 }
+  });
   const listedFiles = await octokit.paginate(octokit.rest.pulls.listFiles, {
     owner,
     repo,
@@ -30530,7 +30687,7 @@ async function collectPullRequestReviewFiles(options) {
   const selectedRecords = fileRecords.filter(
     (record) => selectedPathSet.has(record.filename)
   );
-  return Promise.all(
+  const resolvedFiles = await Promise.all(
     selectedRecords.map(async (record) => {
       const status = normalizePullRequestStatus(record.status);
       const contentRef = status === "deleted" ? baseRef : headRef;
@@ -30544,13 +30701,16 @@ async function collectPullRequestReviewFiles(options) {
       return {
         path: record.filename,
         previousPath: record.previous_filename,
-        name: import_node_path.default.basename(record.filename),
+        name: import_node_path2.default.basename(record.filename),
         content,
         status,
         language: fileLanguage(record.filename),
         patch: typeof record.patch === "string" && record.patch.trim().length > 0 ? record.patch.trim() : void 0
       };
     })
+  );
+  return resolvedFiles.filter(
+    (file) => file.status === "deleted" || file.content.length > 0
   );
 }
 async function collectReviewContext(repositoryRoot, context2) {
@@ -30563,7 +30723,7 @@ async function collectReviewContext(repositoryRoot, context2) {
       commitMessages = [];
     }
   }
-  const repositoryName = context2.repositoryName ?? process.env.GITHUB_REPOSITORY ?? import_node_path.default.basename(repositoryRoot);
+  const repositoryName = context2.repositoryName ?? process.env.GITHUB_REPOSITORY ?? import_node_path2.default.basename(repositoryRoot);
   return {
     repositoryName,
     metadata: context2.metadata,
@@ -30597,15 +30757,20 @@ async function publishInlineReview(params) {
       postedCount: 0
     };
   }
-  const octokit = github2.getOctokit(params.githubToken);
-  const existingCommentsResponse = await octokit.rest.pulls.listReviewComments({
-    owner: params.owner,
-    repo: params.repo,
-    pull_number: params.pullNumber,
-    per_page: 100
+  const octokit = github2.getOctokit(params.githubToken, {
+    request: { timeout: 3e4 }
   });
+  const existingComments = await octokit.paginate(
+    octokit.rest.pulls.listReviewComments,
+    {
+      owner: params.owner,
+      repo: params.repo,
+      pull_number: params.pullNumber,
+      per_page: 100
+    }
+  );
   const existingCommentKeys = /* @__PURE__ */ new Set();
-  for (const comment of existingCommentsResponse.data) {
+  for (const comment of existingComments) {
     if (typeof comment.path !== "string" || typeof comment.line !== "number" || typeof comment.body !== "string") {
       continue;
     }
@@ -30836,9 +31001,6 @@ function resolveChangedLine(params) {
 }
 
 // src/core/inline-comments.ts
-var MAX_INLINE_TITLE_CHARS = 90;
-var MAX_INLINE_DETAIL_CHARS = 220;
-var MAX_INLINE_SUGGESTION_CHARS = 180;
 var SEVERITY_PRIORITY = {
   high: 3,
   medium: 2,
@@ -30856,24 +31018,8 @@ function createSkipCounter() {
 function normalizePath2(pathValue) {
   return pathValue.replaceAll("\\", "/").trim().toLowerCase();
 }
-function clampText(value, maxLength) {
-  if (value.length <= maxLength) {
-    return value;
-  }
-  return `${value.slice(0, Math.max(1, maxLength - 3)).trimEnd()}...`;
-}
 function formatInlineCommentBody(finding) {
-  const lines = [
-    `[${finding.severity.toUpperCase()}] ${clampText(finding.title.trim(), MAX_INLINE_TITLE_CHARS)}`,
-    clampText(finding.detail.trim(), MAX_INLINE_DETAIL_CHARS)
-  ];
-  const recommendation = finding.recommendation ?? finding.suggestion;
-  if (recommendation && recommendation.trim().length > 0) {
-    lines.push(
-      `Suggestion: ${clampText(recommendation.trim(), MAX_INLINE_SUGGESTION_CHARS)}`
-    );
-  }
-  return lines.join("\n");
+  return finding.detail.trim();
 }
 function sortBySeverity(findings) {
   return [...findings].sort((left, right) => {
@@ -31100,6 +31246,26 @@ function parseAsuAimlResponse(rawBody) {
     `Unexpected ASU AIML response format: ${rawBody.slice(0, 500)}`
   );
 }
+var MAX_RETRY_ATTEMPTS = 3;
+var RETRY_BASE_DELAY_MS = 2e3;
+var RETRYABLE_STATUS_CODES = /* @__PURE__ */ new Set([429, 500, 502, 503, 504]);
+function getRetryDelayMs(attempt, response) {
+  if (response?.headers) {
+    const retryAfter = response.headers.get("Retry-After");
+    if (retryAfter) {
+      const parsed = Number.parseInt(retryAfter, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed * 1e3;
+      }
+    }
+  }
+  return RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+}
+function waitForDelay2(milliseconds) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
 async function requestAsuAimlChatCompletion(config, messages) {
   const { systemPrompt, query } = convertMessagesToAsuFormat(messages);
   const body = {
@@ -31115,28 +31281,51 @@ async function requestAsuAimlChatCompletion(config, messages) {
   if (config.modelProvider && config.modelProvider.trim().length > 0) {
     body.model_provider = config.modelProvider;
   }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
-  try {
-    const response = await fetch(config.baseUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal
-    });
-    const rawBody = await response.text();
-    if (!response.ok) {
-      throw new Error(
-        `ASU AIML request failed with status ${response.status}: ${rawBody}`
-      );
+  let lastError;
+  for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+    try {
+      const response = await fetch(config.baseUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      const rawBody = await response.text();
+      if (!response.ok) {
+        if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < MAX_RETRY_ATTEMPTS - 1) {
+          const delayMs = getRetryDelayMs(attempt, response);
+          await waitForDelay2(delayMs);
+          continue;
+        }
+        throw new Error(
+          `ASU AIML request failed with status ${response.status}: ${rawBody}`
+        );
+      }
+      return parseAsuAimlResponse(rawBody);
+    } catch (error2) {
+      const isAbort = error2 instanceof DOMException && error2.name === "AbortError";
+      if (isAbort) {
+        throw new Error(
+          `ASU AIML request timed out after ${config.timeoutMs}ms.`
+        );
+      }
+      lastError = error2 instanceof Error ? error2 : new Error(String(error2));
+      if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+        const delayMs = getRetryDelayMs(attempt);
+        await waitForDelay2(delayMs);
+      }
+    } finally {
+      clearTimeout(timeout);
     }
-    return parseAsuAimlResponse(rawBody);
-  } finally {
-    clearTimeout(timeout);
   }
+  throw new Error(
+    `ASU AIML request failed after ${MAX_RETRY_ATTEMPTS} attempts: ${lastError?.message ?? "unknown error"}`
+  );
 }
 function createAsuAimlProvider(config) {
   return {
@@ -31183,51 +31372,12 @@ function createLogger(sink) {
 // src/core/manifest.ts
 var import_promises3 = require("node:fs/promises");
 var import_node_path3 = __toESM(require("node:path"), 1);
-
-// src/core/prompt-loader.ts
-var import_promises2 = require("node:fs/promises");
-var import_node_path2 = __toESM(require("node:path"), 1);
-var ACTION_ENTRY_FILE_PATTERN = /^index\.(cjs|js|mjs)$/;
-function resolveActionBundleRootFromEntry(entryPath) {
-  if (!entryPath) {
-    return void 0;
-  }
-  const normalizedEntryPath = import_node_path2.default.resolve(entryPath);
-  const entryDir = import_node_path2.default.dirname(normalizedEntryPath);
-  const entryName = import_node_path2.default.basename(normalizedEntryPath);
-  if (import_node_path2.default.basename(entryDir) !== "dist") {
-    return void 0;
-  }
-  if (!ACTION_ENTRY_FILE_PATTERN.test(entryName)) {
-    return void 0;
-  }
-  return import_node_path2.default.resolve(entryDir, "..");
-}
-function resolvePromptRoot(promptRoot = "prompts", options) {
-  if (import_node_path2.default.isAbsolute(promptRoot)) {
-    return promptRoot;
-  }
-  const githubActionPath = options?.githubActionPath ?? process.env.GITHUB_ACTION_PATH;
-  if (githubActionPath && githubActionPath.trim().length > 0) {
-    return import_node_path2.default.resolve(githubActionPath, promptRoot);
-  }
-  const actionBundleRoot = resolveActionBundleRootFromEntry(
-    options?.entryPath ?? process.argv[1]
-  );
-  const baseDir = actionBundleRoot ?? options?.cwd ?? process.cwd();
-  return import_node_path2.default.resolve(baseDir, promptRoot);
-}
-async function readPromptText(promptRoot, promptPath) {
-  const absolutePath = import_node_path2.default.resolve(promptRoot, promptPath);
-  return (0, import_promises2.readFile)(absolutePath, "utf8");
-}
-
-// src/core/manifest.ts
 var stageSchema = external_exports.object({
   id: external_exports.string().min(1),
   label: external_exports.string().min(1),
   purpose: external_exports.string().min(1),
-  promptPath: external_exports.string().min(1)
+  promptPath: external_exports.string().min(1),
+  personaPath: external_exports.string().min(1).optional()
 });
 var manifestSchema = external_exports.object({
   id: external_exports.string().min(1),
@@ -31237,10 +31387,10 @@ var manifestSchema = external_exports.object({
   stages: external_exports.array(stageSchema).min(1),
   combineStage: stageSchema.optional()
 }).superRefine((manifest, context2) => {
-  if (manifest.mode !== "parallel" && manifest.combineStage) {
+  if (manifest.mode === "single" && manifest.combineStage) {
     context2.addIssue({
       code: external_exports.ZodIssueCode.custom,
-      message: "combineStage is only valid for the parallel architecture"
+      message: "combineStage is not valid for the single architecture"
     });
   }
 });
@@ -31262,9 +31412,11 @@ async function loadManifestFile(promptRoot, architectureId) {
 }
 async function loadStage(promptRoot, stage) {
   const promptText = await readPromptText(promptRoot, stage.promptPath);
+  const personaText = stage.personaPath ? await readPromptText(promptRoot, stage.personaPath) : void 0;
   return {
     ...stage,
-    promptText
+    promptText,
+    personaText
   };
 }
 async function loadAvailableArchitectures(promptRootInput = "prompts") {
@@ -31392,7 +31544,6 @@ async function main() {
   try {
     const promptRoot = core.getInput("prompt-root") || "prompts";
     const architectureId = core.getInput("architecture") || "single-pass";
-    const outputPath = core.getInput("output-path") || "CCR.md";
     const includeGlobs = readCsvInput("include-globs", "**/*");
     const excludeGlobs = readCsvInput(
       "exclude-globs",
@@ -31421,7 +31572,7 @@ async function main() {
         core.info(line);
       }
     });
-    const architecture = await loadArchitectureById(promptRoot, architectureId);
+    const architecture = await loadArchitectureById(promptRoot || "prompts", architectureId);
     const reviewContext = await collectReviewContext(repoRoot, {
       repositoryName: import_github.context.repo.owner && import_github.context.repo.repo ? `${import_github.context.repo.owner}/${import_github.context.repo.repo}` : void 0,
       metadata: core.getInput("metadata") || void 0,
@@ -31473,13 +31624,10 @@ async function main() {
       },
       provider,
       logger,
-      maxContextChars
+      maxContextChars,
+      promptRoot: promptRoot || "prompts"
     });
-    const absoluteOutputPath = import_node_path4.default.resolve(repoRoot, outputPath);
     await core.summary.addRaw(result.report.markdown).write();
-    const { mkdir, writeFile } = await import("node:fs/promises");
-    await mkdir(import_node_path4.default.dirname(absoluteOutputPath), { recursive: true });
-    await writeFile(absoluteOutputPath, result.report.markdown, "utf8");
     let inlineCommentsPosted = 0;
     let inlineCommentsSkipped = 0;
     if (postInlineComments) {
@@ -31525,13 +31673,7 @@ async function main() {
               pullNumber: pullRequestNumber,
               commitId: getPullRequestHeadSha(),
               comments: inlineCommentResult.comments,
-              reviewBody: [
-                "CCR inline review comments",
-                "",
-                `Architecture: ${result.report.architectureLabel}`,
-                `Risk: ${result.report.riskLevel}`,
-                `Summary: ${result.report.summary}`
-              ].join("\n")
+              reviewBody: result.report.summary
             });
             inlineCommentsPosted = publishResult.postedCount;
             logger.info("Inline review comments posted.", {
@@ -31543,14 +31685,13 @@ async function main() {
         }
       }
     }
-    core.setOutput("report-path", absoluteOutputPath);
     core.setOutput("summary", result.report.summary);
     core.setOutput("risk-level", result.report.riskLevel);
     core.setOutput("finding-count", String(result.report.findings.length));
     core.setOutput("architecture", result.report.architectureId);
     core.setOutput("inline-comments-posted", String(inlineCommentsPosted));
     core.setOutput("inline-comments-skipped", String(inlineCommentsSkipped));
-    core.info(`CCR.md written to ${absoluteOutputPath}`);
+    core.info("CCR review completed.");
   } catch (error2) {
     const message = error2 instanceof Error ? error2.message : String(error2);
     core.setFailed(message);

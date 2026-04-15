@@ -21,5 +21,6 @@ Assess only the criteria in this dimension:
 Evaluate the provided data flow, feature, UI, backend logic, or change request.
 
 [STATE PRESERVATION REQUIREMENTS]
-- Treat all previous stage outputs as mandatory persistent context. This final stage must retain the full audit history with no loss of prior details, and any correction to earlier material must be explicitly labeled and justified.
-- Begin the response with a clearly labeled section titled "Cumulative Context" containing all prior stage outputs in preserved structured form, then provide the final stage analysis and maintain a complete end-to-end cumulative record.
+- If previousOutputs are provided, treat them as mandatory persistent context. Do not omit or lose any prior evidence, judgments, or recommendations.
+- Begin your response with a clearly labeled "Cumulative Context" section containing all prior outputs in structured form, then add your analysis.
+- If no previousOutputs are provided, proceed directly with your analysis — other stages are running independently and will be merged later.

@@ -178,10 +178,7 @@ export function renderReviewMarkdown(params: {
 
   const notes = modelOutput.notes ?? [];
   const markdown = [
-    "# CCR.md",
-    "",
-    "### Prompt",
-    prompt.trim() || "- No prompt recorded.",
+    "# CCR Review Report",
     "",
     `## ${title}`,
     "",

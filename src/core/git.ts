@@ -38,6 +38,7 @@ const COMMIT_FIELD_SEPARATOR = "\u001f";
 const COMMIT_RECORD_SEPARATOR = "\u001e";
 const DEFAULT_MAX_COMMIT_MESSAGES = 20;
 const DEFAULT_MAX_COMMIT_MESSAGE_CHARS = 400;
+const MAX_FILE_SIZE_BYTES = 1_000_000; // 1 MB — GitHub Contents API limit
 
 interface PullRequestFileRecord {
   filename: string;
@@ -50,6 +51,7 @@ interface RepositoryContentFile {
   type?: string;
   content?: string;
   encoding?: string;
+  size?: number;
 }
 
 function splitStatusLine(line: string): {
@@ -108,7 +110,18 @@ function normalizePullRequestStatus(status: string): ReviewFileInput["status"] {
 
 function fileLanguage(filePath: string): string | undefined {
   const extension = path.extname(filePath).toLowerCase();
-  const mapping: Record<string, string> = {
+  const basename = path.basename(filePath).toLowerCase();
+  const nameMapping: Record<string, string> = {
+    dockerfile: "dockerfile",
+    makefile: "makefile",
+    rakefile: "ruby",
+    gemfile: "ruby",
+  };
+  if (nameMapping[basename]) {
+    return nameMapping[basename];
+  }
+
+  const extensionMapping: Record<string, string> = {
     ".ts": "typescript",
     ".tsx": "tsx",
     ".js": "javascript",
@@ -120,10 +133,58 @@ function fileLanguage(filePath: string): string | undefined {
     ".yml": "yaml",
     ".yaml": "yaml",
     ".css": "css",
+    ".scss": "scss",
+    ".less": "less",
     ".html": "html",
     ".sh": "shell",
+    ".bash": "shell",
+    ".zsh": "shell",
+    ".py": "python",
+    ".go": "go",
+    ".java": "java",
+    ".rb": "ruby",
+    ".rs": "rust",
+    ".cs": "csharp",
+    ".fs": "fsharp",
+    ".swift": "swift",
+    ".kt": "kotlin",
+    ".kts": "kotlin",
+    ".scala": "scala",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".hxx": "cpp",
+    ".php": "php",
+    ".sql": "sql",
+    ".xml": "xml",
+    ".toml": "toml",
+    ".ini": "ini",
+    ".cfg": "ini",
+    ".conf": "ini",
+    ".gradle": "groovy",
+    ".groovy": "groovy",
+    ".lua": "lua",
+    ".r": "r",
+    ".R": "r",
+    ".dart": "dart",
+    ".ex": "elixir",
+    ".exs": "elixir",
+    ".erl": "erlang",
+    ".hrl": "erlang",
+    ".hs": "haskell",
+    ".ml": "ocaml",
+    ".mli": "ocaml",
+    ".vue": "vue",
+    ".svelte": "svelte",
+    ".tf": "hcl",
+    ".proto": "protobuf",
+    ".graphql": "graphql",
+    ".gql": "graphql",
   };
-  return mapping[extension];
+  return extensionMapping[extension];
 }
 
 async function runGit(repositoryRoot: string, args: string[]): Promise<string> {
@@ -259,6 +320,10 @@ async function readRepositoryFileFromGitHubRef(params: {
 
     const data = response.data as RepositoryContentFile | unknown[];
     if (Array.isArray(data) || data.type !== "file") {
+      return "";
+    }
+
+    if (typeof data.size === "number" && data.size > MAX_FILE_SIZE_BYTES) {
       return "";
     }
 
@@ -404,7 +469,9 @@ export async function collectPullRequestReviewFiles(
     maxFiles = 25,
   } = options;
 
-  const octokit = github.getOctokit(githubToken);
+  const octokit = github.getOctokit(githubToken, {
+    request: { timeout: 30_000 },
+  });
   const listedFiles = await octokit.paginate(octokit.rest.pulls.listFiles, {
     owner,
     repo,
@@ -424,7 +491,7 @@ export async function collectPullRequestReviewFiles(
     selectedPathSet.has(record.filename),
   );
 
-  return Promise.all(
+  const resolvedFiles = await Promise.all(
     selectedRecords.map(async (record) => {
       const status = normalizePullRequestStatus(record.status);
       const contentRef = status === "deleted" ? baseRef : headRef;
@@ -449,6 +516,10 @@ export async function collectPullRequestReviewFiles(
             : undefined,
       } satisfies ReviewFileInput;
     }),
+  );
+
+  return resolvedFiles.filter(
+    (file) => file.status === "deleted" || file.content.length > 0,
   );
 }
 

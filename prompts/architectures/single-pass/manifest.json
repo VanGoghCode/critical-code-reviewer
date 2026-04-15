@@ -8,7 +8,8 @@
       "id": "review",
       "label": "Full Audit",
       "purpose": "Run a complete six-dimension educational AI audit and produce a structured review report with findings, evidence, and remediation guidance.",
-      "promptPath": "architectures/single-pass/prompt.md"
+      "promptPath": "architectures/single-pass/prompt.md",
+      "personaPath": "shared/persona.md"
     }
   ]
 }

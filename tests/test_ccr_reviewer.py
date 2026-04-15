@@ -508,7 +508,7 @@ class TestBuildUserPrompt:
         prompt = ccr.build_user_prompt("Review", files)
         assert "path" in prompt
         assert "severity" in prompt
-        assert '"info"' in prompt or "info" in prompt
+        assert "findings" in prompt
 
     def test_includes_previous_outputs(self) -> None:
         files = [ccr.PRFile("a.py", "modified", "@@ -1 +1 @@\n+x\n", 1, 0)]
@@ -569,99 +569,80 @@ class TestReviewBody:
         assert len(comments[0].body) > 300
 
     def test_system_prompt_has_tone_instructions(self) -> None:
-        assert "polite" in ccr.SYSTEM_PROMPT.lower()
-        assert "curious" in ccr.SYSTEM_PROMPT.lower()
-        assert "helpful" in ccr.SYSTEM_PROMPT.lower()
-        assert "[HIGH]" in ccr.SYSTEM_PROMPT  # explicitly banned
+        persona = ccr._load_shared_prompt("persona.md").lower()
+        assert "polite" in persona
+        assert "curious" in persona
+        assert "helpful" in persona
 
     def test_output_format_has_tone_instructions(self) -> None:
-        prompt = ccr.OUTPUT_FORMAT_PROMPT.lower()
-        assert "conversational" in prompt
-        assert "i noticed" in prompt
-        assert "have you considered" in prompt
-        assert "[high]" in prompt  # explicitly banned in body
+        output_format = ccr._get_output_format().lower()
+        assert "conversational" in output_format
+        assert "i noticed" in output_format or "have you considered" in output_format
+        # Severity banned as prefix
+        assert "severity field only" in output_format
 
     def test_output_format_example_is_conversational(self) -> None:
-        """The example body in OUTPUT_FORMAT_PROMPT should use conversational style."""
-        assert "I noticed" in ccr.OUTPUT_FORMAT_PROMPT
+        """The example body in output-format.md should use conversational style."""
+        output_format = ccr._get_output_format()
+        assert "I noticed" in output_format
         # Should NOT contain the old bold-label style
-        assert "**Warning**" not in ccr.OUTPUT_FORMAT_PROMPT
+        assert "**Warning**" not in output_format
 
 
 # ---------------------------------------------------------------------------
-# Guard file injection tests
+# Shared layer file tests
 # ---------------------------------------------------------------------------
 
 
-class TestGuardFiles:
-    """Verify guard files exist, load correctly, and are injected properly."""
+class TestSharedLayers:
+    """Verify shared prompt layer files exist, load correctly, and are assembled properly."""
 
-    def _guard_dir(self) -> Path:
+    def _shared_dir(self) -> Path:
         return Path(__file__).resolve().parent.parent / "prompts" / "shared"
 
-    def test_guard_prefix_exists(self) -> None:
-        assert (self._guard_dir() / "guard-prefix.md").exists()
+    def test_persona_exists(self) -> None:
+        assert (self._shared_dir() / "persona.md").exists()
 
-    def test_guard_suffix_single_exists(self) -> None:
-        assert (self._guard_dir() / "guard-suffix-single.md").exists()
+    def test_humanize_exists(self) -> None:
+        assert (self._shared_dir() / "humanize.md").exists()
 
-    def test_guard_suffix_stages_exists(self) -> None:
-        assert (self._guard_dir() / "guard-suffix-stages.md").exists()
+    def test_output_format_exists(self) -> None:
+        assert (self._shared_dir() / "output-format.md").exists()
 
-    def test_guard_suffix_combine_exists(self) -> None:
-        assert (self._guard_dir() / "guard-suffix-combine.md").exists()
-
-    def test_load_guard_returns_content(self) -> None:
-        content = ccr._load_guard("guard-prefix.md")
+    def test_load_shared_prompt_returns_content(self) -> None:
+        content = ccr._load_shared_prompt("persona.md")
         assert "polite" in content.lower()
         assert "curious" in content.lower()
-        assert "[HIGH]" in content  # explicitly banned
+        assert "friendly teammate" in content.lower()
 
-    def test_load_guard_missing_file_returns_empty(self) -> None:
-        content = ccr._load_guard("nonexistent-guard.md")
+    def test_load_shared_prompt_missing_file_returns_empty(self) -> None:
+        content = ccr._load_shared_prompt("nonexistent.md")
         assert content == ""
 
-    def test_wrap_with_guards_single_mode(self) -> None:
+    def test_build_layered_system_prompt_contains_all_layers(self) -> None:
         prompt = "My custom review criteria"
-        wrapped = ccr._wrap_with_guards(prompt, "single")
-        # Must contain the prefix (tone rules)
-        assert "polite" in wrapped.lower()
-        # Must contain the user prompt
-        assert "My custom review criteria" in wrapped
-        # Must contain the suffix (output format)
-        assert "JSON Schema" in wrapped or "json" in wrapped.lower()
+        system = ccr._build_layered_system_prompt(prompt)
+        # Layer 1: Identity
+        assert "code reviewer" in system.lower()
+        # Layer 2: Persona
+        assert "polite" in system.lower()
+        # Layer 3: Stage prompt
+        assert "My custom review criteria" in system
+        # Layer 4: Humanize
+        assert "20-40 words" in system
 
-    def test_wrap_with_guards_parallel_stage(self) -> None:
-        prompt = "[ROLE]\nYou are a fairness expert."
-        wrapped = ccr._wrap_with_guards(prompt, "parallel")
-        # Must contain prefix
-        assert "polite" in wrapped.lower()
-        # Must contain user prompt
-        assert "fairness expert" in wrapped
-        # Must contain stage suffix
-        assert "OUTPUT REQUIREMENTS" in wrapped or "findings" in wrapped
-
-    def test_wrap_with_guards_combine_stage(self) -> None:
-        prompt = "[CONSOLIDATION RULES]\n- Merge everything"
-        wrapped = ccr._wrap_with_guards(prompt, "parallel", is_combine=True)
-        # Must contain prefix
-        assert "polite" in wrapped.lower()
-        # Must contain user prompt
-        assert "Merge everything" in wrapped
-        # Must contain combine suffix
-        assert "CRITICAL COMPLETENESS RULE" in wrapped
-
-    def test_wrap_with_guards_order(self) -> None:
-        """Prefix must come before the prompt, suffix after."""
+    def test_build_layered_system_prompt_order(self) -> None:
+        """Identity must come before persona, persona before stage, stage before humanize."""
         prompt = "MIDDLE_MARKER"
-        wrapped = ccr._wrap_with_guards(prompt, "single")
-        prefix_pos = wrapped.find("Behavior Rules")
-        prompt_pos = wrapped.find("MIDDLE_MARKER")
-        suffix_pos = wrapped.find("Output Format")
-        assert prefix_pos < prompt_pos < suffix_pos
+        system = ccr._build_layered_system_prompt(prompt)
+        identity_pos = system.find("code reviewer")
+        persona_pos = system.find("Persona")
+        prompt_pos = system.find("MIDDLE_MARKER")
+        humanize_pos = system.find("Writing Quality")
+        assert identity_pos < persona_pos < prompt_pos < humanize_pos
 
     def test_prompt_md_has_no_output_format(self) -> None:
-        """single-pass prompt.md should NOT contain output format (moved to guard)."""
+        """single-pass prompt.md should NOT contain output format (moved to output-format.md)."""
         prompt_path = (
             Path(__file__).resolve().parent.parent
             / "prompts"
@@ -676,7 +657,7 @@ class TestGuardFiles:
         assert "## Review Principles" not in content
 
     def test_stage_prompts_have_no_output_requirements(self) -> None:
-        """Stage prompts should NOT contain OUTPUT REQUIREMENTS (moved to guard)."""
+        """Stage prompts should NOT contain OUTPUT REQUIREMENTS (moved to output-format.md)."""
         for i in range(1, 7):
             stage_path = (
                 Path(__file__).resolve().parent.parent
@@ -691,7 +672,8 @@ class TestGuardFiles:
             assert "[OUTPUT REQUIREMENTS]" not in content
 
     def test_combine_md_has_no_output_format(self) -> None:
-        """combine.md should NOT contain OUTPUT FORMAT (moved to guard)."""
+        """combine.md should NOT contain OUTPUT FORMAT (moved to output-format.md).
+        Note: combine.md DOES contain CRITICAL COMPLETENESS RULE (combine-specific logic)."""
         combine_path = (
             Path(__file__).resolve().parent.parent
             / "prompts"
@@ -703,4 +685,3 @@ class TestGuardFiles:
             pytest.skip("combine.md not found")
         content = combine_path.read_text(encoding="utf-8")
         assert "[OUTPUT FORMAT]" not in content
-        assert "[CRITICAL COMPLETENESS RULE]" not in content

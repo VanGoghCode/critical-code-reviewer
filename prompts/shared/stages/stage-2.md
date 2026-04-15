@@ -36,5 +36,6 @@ Assess only the criteria in this dimension:
 Evaluate the provided learning system, adaptive logic, or change request.
 
 [STATE PRESERVATION REQUIREMENTS]
-- Treat all previous stage outputs as mandatory persistent context. Do not omit, compress away, contradict, or lose any prior evidence, judgments, consequences, or remediation details unless explicitly correcting them and clearly explaining why.
-- Begin the response with a clearly labeled section titled "Cumulative Context" that carries forward all prior stage outputs in full or faithfully integrated structured form, then add the new stage analysis after it.
+- If previousOutputs are provided, treat them as mandatory persistent context. Do not omit or lose any prior evidence, judgments, or recommendations.
+- Begin your response with a clearly labeled "Cumulative Context" section containing all prior outputs in structured form, then add your analysis.
+- If no previousOutputs are provided, proceed directly with your analysis — other stages are running independently and will be merged later.

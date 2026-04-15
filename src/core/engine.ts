@@ -1,4 +1,5 @@
 import { parseReviewModelOutput, renderReviewMarkdown } from "./report.js";
+import { readPromptText } from "./prompt-loader.js";
 import type {
   LoadedPromptArchitecture,
   ReviewLogger,
@@ -102,37 +103,19 @@ function buildRequestEnvelope(
   );
 }
 
-function buildSystemMessage(
-  architecture: LoadedPromptArchitecture,
-  stageLabel: string,
-  stagePurpose: string,
-  mode: string,
-): string {
-  return [
-    "You are CCR, a code review engine that must return valid JSON only.",
-    `Architecture: ${architecture.label} (${architecture.id}).`,
-    `Mode: ${mode}.`,
-    `Current stage: ${stageLabel}.`,
-    `Stage purpose: ${stagePurpose}.`,
-    "Return a JSON object with the following keys: summary, riskLevel, findings, todos, notes.",
-    "Risk level must be one of low, medium, or high.",
-    "Findings must be an array of objects. Every finding MUST include:",
-    "  - severity: \"low\" | \"medium\" | \"high\"",
-    "  - title: short label for the issue",
-    "  - detail: 1-3 sentence explanation",
-    "  - file: exact file path from the diff (required — use the path field from the file object in the input)",
-    "  - line: integer line number in the NEW file pointing to an added or changed line (required)",
-    "  - endLine: optional — last line if the finding spans a block",
-    "  - recommendation or suggestion: optional fix",
-    "Do NOT omit file or line. If a finding is general and not tied to a specific changed line, set file to the most relevant changed file and line to the first changed line in that file.",
-    "Use reviewContext.commitMessages to understand intent and flag mismatches between commit intent and code changes.",
-    "Keep detail and recommendation concise so each finding can be posted as a short inline review comment.",
-    "If previousOutputsParsed is present, use it as the authoritative previous-stage context to avoid escaped JSON artifacts.",
-    "Do not wrap the JSON in Markdown fences.",
-    "",
-    "Example output:",
-    '{"summary":"...","riskLevel":"medium","findings":[{"severity":"high","title":"Missing error handling","detail":"No try-catch around fetch call.","file":"src/api/client.ts","line":42,"recommendation":"Wrap in try-catch with fallback."}],"todos":["Add unit tests for error path."],"notes":[]}',
-  ].join("\n");
+interface SharedLayers {
+  persona: string;
+  humanize: string;
+  outputFormat: string;
+}
+
+async function loadSharedLayers(promptRoot: string): Promise<SharedLayers> {
+  const [persona, humanize, outputFormat] = await Promise.all([
+    readPromptText(promptRoot, "shared/persona.md"),
+    readPromptText(promptRoot, "shared/humanize.md"),
+    readPromptText(promptRoot, "shared/output-format.md"),
+  ]);
+  return { persona, humanize, outputFormat };
 }
 
 function createMessages(params: {
@@ -142,40 +125,58 @@ function createMessages(params: {
   stageLabel: string;
   stagePurpose: string;
   promptText: string;
+  stagePersona?: string;
   request: ReviewRequest;
   previousOutputs: string[];
   mode: string;
   maxContextChars: number;
+  sharedLayers: SharedLayers;
 }): ReviewProviderMessage[] {
-  const messages: ReviewProviderMessage[] = [
-    {
-      role: "system",
-      content: buildSystemMessage(
-        params.architecture,
-        params.stageLabel,
-        params.stagePurpose,
-        params.mode,
-      ),
-    },
-  ];
+  const messages: ReviewProviderMessage[] = [];
 
-  if (params.promptText.trim().length > 0) {
-    messages.push({
-      role: "system",
-      content: params.promptText.trim(),
-    });
+  // Layer 1: Identity
+  messages.push({
+    role: "system",
+    content: [
+      "You are a code reviewer.",
+      `Architecture: ${params.architecture.label} (${params.architecture.id}).`,
+      `Mode: ${params.mode}.`,
+      `Current stage: ${params.stageLabel}.`,
+      `Stage purpose: ${params.stagePurpose}.`,
+    ].join("\n"),
+  });
+
+  // Layer 2: Persona (per-stage override or shared fallback)
+  const persona = (params.stagePersona ?? params.sharedLayers.persona).trim();
+  if (persona.length > 0) {
+    messages.push({ role: "system", content: persona });
   }
 
-  messages.push({
-    role: "user",
-    content: buildRequestEnvelope(
-      params.request,
-      params.previousOutputs,
-      params.stageIndex,
-      params.stageCount,
-      params.maxContextChars,
-    ),
-  });
+  // Layer 3: Stage-specific instructions (editable)
+  const promptText = params.promptText.trim();
+  if (promptText.length > 0) {
+    messages.push({ role: "system", content: promptText });
+  }
+
+  // Layer 4: Humanize
+  const humanize = params.sharedLayers.humanize.trim();
+  if (humanize.length > 0) {
+    messages.push({ role: "system", content: humanize });
+  }
+
+  // User message: file envelope + Layer 5 (output format)
+  const envelope = buildRequestEnvelope(
+    params.request,
+    params.previousOutputs,
+    params.stageIndex,
+    params.stageCount,
+    params.maxContextChars,
+  );
+  const outputFormat = params.sharedLayers.outputFormat.trim();
+  const userContent = outputFormat.length > 0
+    ? `${envelope}\n\n${outputFormat}`
+    : envelope;
+  messages.push({ role: "user", content: userContent });
 
   return messages;
 }
@@ -300,6 +301,7 @@ async function executeStage(params: {
   logger: ReviewLogger;
   mode: string;
   maxContextChars: number;
+  sharedLayers: SharedLayers;
 }): Promise<StageExecutionResult> {
   const messages = createMessages({
     architecture: params.architecture,
@@ -308,11 +310,18 @@ async function executeStage(params: {
     stageLabel: params.stage.label,
     stagePurpose: params.stage.purpose,
     promptText: params.stage.promptText,
+    stagePersona: params.stage.personaText,
     request: params.request,
     previousOutputs: params.previousOutputs,
     mode: params.mode,
     maxContextChars: params.maxContextChars,
+    sharedLayers: params.sharedLayers,
   });
+
+  const loggableMessages = messages.map((message) => ({
+    role: message.role,
+    contentLength: message.content.length,
+  }));
 
   params.logger.info("Executing review stage", {
     stageId: params.stage.id,
@@ -322,7 +331,7 @@ async function executeStage(params: {
     stageCount: params.stageCount,
     stageStatus: "started",
     mode: params.mode,
-    promptMessages: messages, // Log exact prompt sent to LLM
+    promptMessages: loggableMessages,
   });
 
   const stageStartedAtMs = Date.now();
@@ -355,10 +364,13 @@ export async function runReviewArchitecture(params: {
   provider: ReviewProvider;
   logger: ReviewLogger;
   maxContextChars?: number;
+  promptRoot?: string;
+  sharedLayers?: SharedLayers;
 }): Promise<ReviewRunResult> {
   const { architecture, request, provider, logger } = params;
   const runStartedAtMs = Date.now();
   const maxContextChars = params.maxContextChars ?? 12000;
+  const sharedLayers = params.sharedLayers ?? await loadSharedLayers(params.promptRoot ?? "prompts");
   logger.info("Starting review run", {
     architectureId: architecture.id,
     mode: architecture.mode,
@@ -382,6 +394,7 @@ export async function runReviewArchitecture(params: {
       logger,
       mode: architecture.mode,
       maxContextChars,
+      sharedLayers,
     });
     stageOutputs.push(stageResult);
 
@@ -409,7 +422,6 @@ export async function runReviewArchitecture(params: {
   }
 
   if (architecture.mode === "sequential") {
-    let previousStageOutput: string | undefined;
     for (const [index, stage] of architecture.stages.entries()) {
       const result = await executeStage({
         architecture,
@@ -417,14 +429,54 @@ export async function runReviewArchitecture(params: {
         stageCount,
         stage,
         request,
-        previousOutputs: previousStageOutput ? [previousStageOutput] : [],
+        previousOutputs: stageOutputs.map((s) => s.output),
         provider,
         logger,
         mode: architecture.mode,
         maxContextChars,
+        sharedLayers,
       });
       stageOutputs.push(result);
-      previousStageOutput = result.output;
+    }
+
+    // If a combine stage is defined, run it with all stage outputs.
+    if (architecture.combineStage) {
+      const combineResult = await executeStage({
+        architecture,
+        stageIndex: architecture.stages.length,
+        stageCount,
+        stage: architecture.combineStage,
+        request,
+        previousOutputs: stageOutputs.map((entry) => entry.output),
+        provider,
+        logger,
+        mode: architecture.mode,
+        maxContextChars,
+        sharedLayers,
+      });
+      stageOutputs.push(combineResult);
+
+      const modelOutput = parseReviewModelOutput(combineResult.output);
+      const report = renderReviewMarkdown({
+        architecture,
+        request,
+        modelOutput,
+        stageOutputs,
+        rawOutput: combineResult.output,
+        prompt: combineResult.prompt,
+      });
+
+      logger.info("Review run completed", {
+        architectureId: architecture.id,
+        findingCount: report.findings.length,
+        riskLevel: report.riskLevel,
+      });
+
+      return {
+        report,
+        stageOutputs,
+        metrics: aggregateRunMetrics(runStartedAtMs, stageOutputs),
+      } satisfies ReviewRunResult;
     }
 
     const finalStageResult = stageOutputs.at(-1);
@@ -483,6 +535,7 @@ export async function runReviewArchitecture(params: {
         logger,
         mode: architecture.mode,
         maxContextChars,
+        sharedLayers,
       });
     }),
   );
@@ -491,7 +544,7 @@ export async function runReviewArchitecture(params: {
   const combineStage = architecture.combineStage;
   if (!combineStage) {
     throw new Error(
-      `Parallel architecture ${architecture.id} is missing a combine stage.`,
+      `Parallel architecture requires a combine stage.`,
     );
   }
 
@@ -506,6 +559,7 @@ export async function runReviewArchitecture(params: {
     logger,
     mode: architecture.mode,
     maxContextChars,
+    sharedLayers,
   });
   stageOutputs.push(combineResult);
 
