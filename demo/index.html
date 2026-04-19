@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Critical Code Reviewer — Live Demo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="root" id="root">
+
+  <!-- ═══ TOP BAR ═══ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"/>
+          <line x1="16.5" y1="16.5" x2="22" y2="22"/>
+        </svg>
+      </div>
+      <span class="brand-name">Critical Code Reviewer</span>
+      <span class="brand-pill">GitHub Action</span>
+    </div>
+
+    <div class="pr-ref">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+      </svg>
+      <span class="repo-path">VanGoghCode/adaptive-learn-lms</span>
+      <span class="pr-sep">/</span>
+      <span class="pr-label">pull</span>
+      <span class="pr-number">#47</span>
+    </div>
+
+    <div class="event-badge" id="event-badge">
+      <span class="event-pulse"></span>
+      <span>PR synchronize</span>
+    </div>
+  </header>
+
+  <!-- ═══ PR CONTEXT ROW ═══ -->
+  <div class="pr-context">
+    <span class="pr-state-badge">Open</span>
+    <span class="pr-desc">
+      <strong>mabuhann</strong> wants to merge 3 commits into
+      <code class="ref">main</code> from <code class="ref">feat/learner-classification</code>
+    </span>
+    <div class="pr-stats">
+      <span class="stat add">+22</span>
+      <span class="stat del">−5</span>
+      <span class="stat neutral">3 files</span>
+    </div>
+  </div>
+
+  <!-- ═══ MAIN GRID ═══ -->
+  <div class="main-grid">
+
+    <!-- ─── LEFT: CODE DIFF PANEL ─── -->
+    <section class="diff-panel">
+
+      <div class="diff-file-bar">
+        <div class="dfb-left">
+          <svg class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8b949e" stroke-width="2.5" stroke-linecap="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+          <span class="file-lang-dot js" title="JavaScript"></span>
+          <span class="file-path">src/learners/<strong>adaptive.js</strong></span>
+        </div>
+        <div class="dfb-right">
+          <span class="hunk-add">+22</span>
+          <span class="hunk-del">−5</span>
+        </div>
+      </div>
+
+      <div class="diff-table" id="diff-table">
+        <div class="scan-beam" id="scan-beam"></div>
+
+        <!-- context lines -->
+        <div class="dl ctx" data-ln="1">
+          <span class="g o">1</span><span class="g n">1</span>
+          <span class="mk"> </span>
+          <code><span class="kw">import</span> { db } <span class="kw">from</span> <span class="str">'../database'</span>;</code>
+        </div>
+        <div class="dl ctx" data-ln="2">
+          <span class="g o">2</span><span class="g n">2</span>
+          <span class="mk"> </span>
+          <code><span class="kw">import</span> { sendEmail } <span class="kw">from</span> <span class="str">'../notifications'</span>;</code>
+        </div>
+
+        <!-- hunk separator -->
+        <div class="hunk-sep">@@ -3,0 +3,26 @@</div>
+
+        <!-- added lines -->
+        <div class="dl add" data-ln="3">
+          <span class="g o"></span><span class="g n">3</span>
+          <span class="mk">+</span>
+          <code></code>
+        </div>
+        <div class="dl add" data-ln="4">
+          <span class="g o"></span><span class="g n">4</span>
+          <span class="mk">+</span>
+          <code><span class="kw">const</span> PERFORMANCE_LABELS = {</code>
+        </div>
+        <div class="dl add finding-target" id="f1-line" data-ln="5">
+          <span class="g o"></span><span class="g n">5</span>
+          <span class="mk">+</span>
+          <code>  <span class="prop">STRUGGLING</span>: <span class="str">'below_threshold'</span>,</code>
+        </div>
+        <div class="dl add" data-ln="6">
+          <span class="g o"></span><span class="g n">6</span>
+          <span class="mk">+</span>
+          <code>  <span class="prop">NORMAL</span>: <span class="str">'on_track'</span>,</code>
+        </div>
+        <div class="dl add" data-ln="7">
+          <span class="g o"></span><span class="g n">7</span>
+          <span class="mk">+</span>
+          <code>  <span class="prop">ADVANCED</span>: <span class="str">'gifted'</span>,</code>
+        </div>
+        <div class="dl add" data-ln="8">
+          <span class="g o"></span><span class="g n">8</span>
+          <span class="mk">+</span>
+          <code>};</code>
+        </div>
+        <div class="dl add" data-ln="9">
+          <span class="g o"></span><span class="g n">9</span>
+          <span class="mk">+</span>
+          <code></code>
+        </div>
+        <div class="dl add" data-ln="10">
+          <span class="g o"></span><span class="g n">10</span>
+          <span class="mk">+</span>
+          <code><span class="kw">function</span> <span class="fn">classifyLearner</span>(score) {</code>
+        </div>
+        <div class="dl add" data-ln="11">
+          <span class="g o"></span><span class="g n">11</span>
+          <span class="mk">+</span>
+          <code>  <span class="kw">if</span> (score &lt; <span class="num">40</span>) <span class="kw">return</span> PERFORMANCE_LABELS.STRUGGLING;</code>
+        </div>
+        <div class="dl add" data-ln="12">
+          <span class="g o"></span><span class="g n">12</span>
+          <span class="mk">+</span>
+          <code>  <span class="kw">if</span> (score &gt; <span class="num">85</span>) <span class="kw">return</span> PERFORMANCE_LABELS.ADVANCED;</code>
+        </div>
+        <div class="dl add" data-ln="13">
+          <span class="g o"></span><span class="g n">13</span>
+          <span class="mk">+</span>
+          <code>  <span class="kw">return</span> PERFORMANCE_LABELS.NORMAL;</code>
+        </div>
+        <div class="dl add" data-ln="14">
+          <span class="g o"></span><span class="g n">14</span>
+          <span class="mk">+</span>
+          <code>}</code>
+        </div>
+        <div class="dl add" data-ln="15">
+          <span class="g o"></span><span class="g n">15</span>
+          <span class="mk">+</span>
+          <code></code>
+        </div>
+        <div class="dl add" data-ln="16">
+          <span class="g o"></span><span class="g n">16</span>
+          <span class="mk">+</span>
+          <code><span class="kw">async function</span> <span class="fn">buildParentReport</span>(learner) {</code>
+        </div>
+        <div class="dl add finding-target" id="f2-line" data-ln="17">
+          <span class="g o"></span><span class="g n">17</span>
+          <span class="mk">+</span>
+          <code>  <span class="kw">const</span> greeting = <span class="str">`Dear <span class="tmpl">${learner.fatherName}</span> and <span class="tmpl">${learner.motherName}</span>,`</span>;</code>
+        </div>
+        <div class="dl add" data-ln="18">
+          <span class="g o"></span><span class="g n">18</span>
+          <span class="mk">+</span>
+          <code>  <span class="kw">await</span> <span class="fn">sendEmail</span>(learner.parentEmail, greeting);</code>
+        </div>
+        <div class="dl add" data-ln="19">
+          <span class="g o"></span><span class="g n">19</span>
+          <span class="mk">+</span>
+          <code>}</code>
+        </div>
+        <div class="dl add" data-ln="20">
+          <span class="g o"></span><span class="g n">20</span>
+          <span class="mk">+</span>
+          <code></code>
+        </div>
+        <div class="dl add finding-target" id="f3-line" data-ln="21">
+          <span class="g o"></span><span class="g n">21</span>
+          <span class="mk">+</span>
+          <code><span class="kw">export const</span> GENDER_OPTIONS = [<span class="str">'Male'</span>, <span class="str">'Female'</span>];</code>
+        </div>
+        <div class="dl add" data-ln="22">
+          <span class="g o"></span><span class="g n">22</span>
+          <span class="mk">+</span>
+          <code></code>
+        </div>
+        <div class="dl add" data-ln="23">
+          <span class="g o"></span><span class="g n">23</span>
+          <span class="mk">+</span>
+          <code><span class="kw">function</span> <span class="fn">renderProgressBadge</span>(learner) {</code>
+        </div>
+        <div class="dl add finding-target" id="f4-line" data-ln="24">
+          <span class="g o"></span><span class="g n">24</span>
+          <span class="mk">+</span>
+          <code>  <span class="kw">return</span> <span class="str">`&lt;div title="<span class="tmpl">${learner.label}</span>"&gt;`</span> +</code>
+        </div>
+        <div class="dl add" data-ln="25">
+          <span class="g o"></span><span class="g n">25</span>
+          <span class="mk">+</span>
+          <code>    <span class="str">`&lt;img src="/badges/<span class="tmpl">${learner.tier}</span>.png"&gt;`</span>;</code>
+        </div>
+        <div class="dl add" data-ln="26">
+          <span class="g o"></span><span class="g n">26</span>
+          <span class="mk">+</span>
+          <code>}</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── RIGHT: WORKFLOW SIDEBAR ─── -->
+    <aside class="sidebar">
+
+      <!-- Workflow card -->
+      <div class="wf-card">
+        <div class="wf-card-head">
+          <div class="wf-name-row">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+            <span class="wf-file">ccr-review.yml</span>
+          </div>
+          <div class="wf-status" id="wf-status">
+            <span class="wf-dot" id="wf-dot"></span>
+            <span id="wf-status-text">Queued</span>
+          </div>
+        </div>
+
+        <div class="steps">
+          <!-- Step 1: Checkout -->
+          <div class="step" id="step-checkout" data-state="pending">
+            <div class="step-icon-wrap">
+              <svg class="si-idle" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#484f58" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+              <div class="si-spin"></div>
+              <svg class="si-done" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>
+            </div>
+            <div class="step-text">
+              <span class="step-name">Checkout repository</span>
+              <span class="step-sub">actions/checkout@v6  ·  fetch-depth: 0</span>
+            </div>
+            <span class="step-dur" id="dur-checkout"></span>
+          </div>
+
+          <!-- Step 2: CCR -->
+          <div class="step" id="step-ccr" data-state="pending">
+            <div class="step-icon-wrap">
+              <svg class="si-idle" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#484f58" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+              <div class="si-spin"></div>
+              <svg class="si-done" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>
+            </div>
+            <div class="step-text">
+              <span class="step-name">Run CCR review</span>
+              <span class="step-sub" id="ccr-sub">VanGoghCode/critical-code-reviewer@main</span>
+            </div>
+            <span class="step-dur" id="dur-ccr"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analysis panel (visible during scan) -->
+      <div class="analysis-card" id="analysis-card">
+        <div class="analysis-head">
+          <div class="arch-chip">
+            <span class="arch-dot"></span>
+            <span>single-pass</span>
+          </div>
+          <div class="scan-progress-wrap">
+            <div class="scan-bar"><div class="scan-fill" id="scan-fill"></div></div>
+            <span class="scan-label" id="scan-label">Initializing…</span>
+          </div>
+        </div>
+        <div class="config-row">
+          <span class="cfg-chip">model: gpt5_2</span>
+          <span class="cfg-chip">temp: 0.2</span>
+          <span class="cfg-chip">inline: file-coverage</span>
+        </div>
+        <div class="findings-list" id="findings-list"></div>
+      </div>
+
+      <!-- Summary card (revealed at end) -->
+      <div class="summary-card" id="summary-card">
+        <div class="summary-head">
+          <div class="summary-title-row">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>
+            <span>Review complete</span>
+          </div>
+          <div class="risk-badge high" id="risk-badge">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.5L21 19H3L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>
+            HIGH RISK
+          </div>
+        </div>
+
+        <div class="sev-row">
+          <div class="sev-block">
+            <span class="sev-n high">2</span>
+            <span class="sev-l">High</span>
+          </div>
+          <div class="sev-divider"></div>
+          <div class="sev-block">
+            <span class="sev-n medium">2</span>
+            <span class="sev-l">Medium</span>
+          </div>
+          <div class="sev-divider"></div>
+          <div class="sev-block">
+            <span class="sev-n low">0</span>
+            <span class="sev-l">Low</span>
+          </div>
+        </div>
+
+        <p class="summary-body">
+          The PR introduces a well-structured learner classification system with clear separation of concerns.
+          A few patterns are worth revisiting before merge: performance labels use deficit-based framing,
+          the parent report hard-codes a nuclear family structure, and the progress badge relies on a
+          hover-only title attribute that keyboard and screen reader users won't reach.
+        </p>
+
+        <div class="todos-block">
+          <div class="todos-label">Follow-up</div>
+          <div class="todo-item">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Audit all learner-facing labels for deficit framing before merge
+          </div>
+          <div class="todo-item">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Update enrollment schema to use a single guardian contact field
+          </div>
+          <div class="todo-item">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Add aria-label and alt text to progress badge component
+          </div>
+        </div>
+
+        <div class="outputs-row">
+          <span class="out-chip">4 findings</span>
+          <span class="out-chip">2 inline comments posted</span>
+          <span class="out-chip">architecture: single-pass</span>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+  <!-- ═══ DEMO CONTROLS ═══ -->
+  <div class="demo-bar">
+    <div class="demo-track">
+      <div class="demo-fill" id="demo-fill"></div>
+    </div>
+    <button class="replay-btn" id="replay-btn">↺ Replay demo</button>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
