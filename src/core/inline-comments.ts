@@ -79,7 +79,7 @@ function formatInlineCommentBody(finding: ReviewFinding): string {
   // Keep inline comments in a predictable structure:
   // 1) criterion name, 2) issue + impact detail, 3) small suggestion.
   const recommendation = finding.recommendation ?? finding.suggestion;
-  
+
   const parts = [
     `**${finding.title.trim()}**\n`,
     finding.detail.trim(),
@@ -163,14 +163,17 @@ function resolveInlineCommentCandidate(params: {
     return { reason: "no-changed-lines" };
   }
 
+  const searchText = [
+    finding.title,
+    finding.recommendation ?? finding.suggestion ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   const resolvedLine = resolveChangedLine({
     patchMap,
     requestedLine: finding.line,
-    searchText: [
-      finding.title,
-      finding.detail,
-      finding.recommendation ?? finding.suggestion ?? "",
-    ].join("\n"),
+    searchText,
     allowFallbackToFirstChangedLine,
   });
 

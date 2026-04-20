@@ -218,6 +218,69 @@ export function parseUnifiedDiffPatch(patch: string): ParsedPatchMap {
   };
 }
 
+interface FuzzySearchResult {
+  exactMatchLines: Set<number>;
+  bestLine: number | undefined;
+  bestScore: number;
+  bestOverlap: number;
+}
+
+function runFuzzySearch(
+  candidates: string[],
+  lineMap: Map<number, string>,
+  roundedRequestedLine: number | undefined,
+): FuzzySearchResult {
+  const exactMatchLines = new Set<number>();
+  let bestLine: number | undefined;
+  let bestScore = 0;
+  let bestOverlap = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const candidate of candidates) {
+    for (const [line, content] of lineMap.entries()) {
+      const normalizedLine = normalizeSearchText(content);
+
+      if (
+        normalizedLine.includes(candidate) ||
+        (candidate.length >= 12 && candidate.includes(normalizedLine))
+      ) {
+        exactMatchLines.add(line);
+        continue;
+      }
+
+      const overlap = tokenOverlapScore(candidate, normalizedLine);
+      const distance =
+        typeof roundedRequestedLine === "number"
+          ? Math.abs(line - roundedRequestedLine)
+          : Number.POSITIVE_INFINITY;
+
+      // Fix 1: distance is a real secondary sort key, not just a last-resort
+      // tiebreaker. Two candidates with equivalent token scores now resolve
+      // to whichever line is closest to the AI-requested line number.
+      const isBetter =
+        overlap.overlaps > bestOverlap ||
+        (overlap.overlaps === bestOverlap && overlap.score > bestScore) ||
+        (overlap.overlaps === bestOverlap &&
+          overlap.score === bestScore &&
+          distance < bestDistance);
+
+      const isEquivalentButCloser =
+        overlap.overlaps === bestOverlap &&
+        Math.abs(overlap.score - bestScore) < 0.05 &&
+        distance < bestDistance;
+
+      if (isBetter || isEquivalentButCloser) {
+        bestLine = line;
+        bestScore = overlap.score;
+        bestOverlap = overlap.overlaps;
+        bestDistance = distance;
+      }
+    }
+  }
+
+  return { exactMatchLines, bestLine, bestScore, bestOverlap };
+}
+
 export function resolveChangedLine(params: {
   patchMap: ParsedPatchMap;
   requestedLine?: number;
@@ -251,45 +314,26 @@ export function resolveChangedLine(params: {
 
   if (searchText && searchText.trim().length > 0) {
     const candidates = extractSearchCandidates(searchText);
-    const exactMatchLines = new Set<number>();
-    let bestLine: number | undefined;
-    let bestScore = 0;
-    let bestOverlap = 0;
-    let bestDistance = Number.POSITIVE_INFINITY;
+    let result = runFuzzySearch(
+      candidates,
+      patchMap.changedLineContentByLine,
+      roundedRequestedLine,
+    );
 
-    for (const candidate of candidates) {
-      for (const [
-        line,
-        content,
-      ] of patchMap.allVisibleLineContentByLine.entries()) {
-        const normalizedLine = normalizeSearchText(content);
-        if (
-          normalizedLine.includes(candidate) ||
-          (candidate.length >= 12 && candidate.includes(normalizedLine))
-        ) {
-          exactMatchLines.add(line);
-          continue;
-        }
-
-        const overlap = tokenOverlapScore(candidate, normalizedLine);
-        const distance =
-          typeof roundedRequestedLine === "number"
-            ? Math.abs(line - roundedRequestedLine)
-            : Number.POSITIVE_INFINITY;
-        if (
-          overlap.overlaps > bestOverlap ||
-          (overlap.overlaps === bestOverlap && overlap.score > bestScore) ||
-          (overlap.overlaps === bestOverlap &&
-            overlap.score === bestScore &&
-            distance < bestDistance)
-        ) {
-          bestLine = line;
-          bestScore = overlap.score;
-          bestOverlap = overlap.overlaps;
-          bestDistance = distance;
-        }
-      }
+    // Fall back to all visible lines only when the changed-lines pass found
+    // nothing useful (no exact matches and not enough token overlap).
+    if (
+      result.exactMatchLines.size === 0 &&
+      (!result.bestLine || result.bestOverlap < 3)
+    ) {
+      result = runFuzzySearch(
+        candidates,
+        patchMap.allVisibleLineContentByLine,
+        roundedRequestedLine,
+      );
     }
+
+    const { exactMatchLines, bestLine, bestScore, bestOverlap } = result;
 
     if (exactMatchLines.size > 0) {
       const sortedExactMatches = Array.from(exactMatchLines).sort(
