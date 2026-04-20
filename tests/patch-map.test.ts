@@ -4,6 +4,7 @@ import {
   resolveChangedLine,
   parseStructuredDiffHunks,
   resolveAnchorToGitHubLocation,
+  resolveCodeBlockToLine,
 } from "../src/core/patch-map";
 
 const SAMPLE_PATCH = [
@@ -189,5 +190,87 @@ describe("resolveAnchorToGitHubLocation", () => {
 
     expect(result?.line).toBe(2);
     expect(result?.confidence).toBe("exact");
+  });
+
+  it("resolves multi-line code block to correct line", () => {
+    const patch = [
+      "@@ -1,3 +1,4 @@",
+      " const seed = 1;",
+      "-const score = compute(raw);",
+      "+const normalizedScore = compute(raw);",
+      "+const teacherVisible = normalizedScore > 0.8;",
+      " export { normalizedScore };",
+    ].join("\n");
+    
+    const hunks = parseStructuredDiffHunks(patch);
+    
+    // AI provides a code block (with + prefix as it would appear in diff)
+    const codeBlock = [
+      "+const normalizedScore = compute(raw);",
+      "+const teacherVisible = normalizedScore > 0.8;",
+    ].join("\n");
+    
+    const result = resolveCodeBlockToLine({
+      codeBlock,
+      hunks,
+      preferChangedLines: true,
+    });
+
+    expect(result?.line).toBe(2);
+    expect(["exact", "high"]).toContain(result?.confidence);
+  });
+
+  it("resolves code block with partial match", () => {
+    const patch = [
+      "@@ -1,3 +1,4 @@",
+      " const seed = 1;",
+      "-const score = compute(raw);",
+      "+const normalizedScore = compute(raw);",
+      "+const teacherVisible = normalizedScore > 0.8;",
+      " export { normalizedScore };",
+    ].join("\n");
+    
+    const hunks = parseStructuredDiffHunks(patch);
+    
+    // AI provides code block without the + prefix (AI might forget)
+    const codeBlock = [
+      "const normalizedScore = compute(raw);",
+      "const teacherVisible = normalizedScore > 0.8;",
+    ].join("\n");
+    
+    const result = resolveCodeBlockToLine({
+      codeBlock,
+      hunks,
+      preferChangedLines: true,
+    });
+
+    expect(result?.line).toBe(2);
+    expect(["exact", "high"]).toContain(result?.confidence);
+  });
+
+  it("returns undefined for non-matching code block", () => {
+    const patch = [
+      "@@ -1,3 +1,4 @@",
+      " const seed = 1;",
+      "-const score = compute(raw);",
+      "+const normalizedScore = compute(raw);",
+      "+const teacherVisible = normalizedScore > 0.8;",
+      " export { normalizedScore };",
+    ].join("\n");
+    
+    const hunks = parseStructuredDiffHunks(patch);
+    
+    const codeBlock = [
+      "function nonexistentCode() {",
+      "  return 'not in diff';",
+      "}",
+    ].join("\n");
+    
+    const result = resolveCodeBlockToLine({
+      codeBlock,
+      hunks,
+    });
+
+    expect(result).toBeUndefined();
   });
 });

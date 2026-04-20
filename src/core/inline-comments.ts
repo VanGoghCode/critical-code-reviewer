@@ -1,6 +1,7 @@
 import {
   parseStructuredDiffHunks,
   resolveAnchorToGitHubLocation,
+  resolveCodeBlockToLine,
   type StructuredDiffHunk,
 } from "./patch-map.js";
 import type {
@@ -174,61 +175,85 @@ function resolveInlineCommentCandidate(params: {
     return { reason: "no-changed-lines" };
   }
 
-  // Use anchor snippet to resolve exact location
+  // Priority 1: Try to resolve using codeBlock (multi-line matching)
+  if (finding.codeBlock && finding.codeBlock.trim().length > 0) {
+    const codeBlockResult = resolveCodeBlockToLine({
+      codeBlock: finding.codeBlock,
+      hunks,
+      preferChangedLines: true,
+    });
+
+    if (codeBlockResult && codeBlockResult.confidence !== "low") {
+      const dedupeKey = `${fileRecord.path}:${codeBlockResult.line}:${finding.title
+        .trim()
+        .toLowerCase()}`;
+
+      return {
+        candidate: {
+          path: fileRecord.path,
+          line: codeBlockResult.line,
+          body: formatInlineCommentBody(finding, codeBlockResult.line),
+          severity: finding.severity,
+          title: finding.title,
+          dedupeKey,
+        },
+      };
+    }
+  }
+
+  // Priority 2: Fall back to anchorSnippet (single-line matching)
   const anchorSnippet = finding.anchorSnippet || finding.detail;
   
-  if (!anchorSnippet || anchorSnippet.trim().length === 0) {
-    return { reason: "unresolved-line" };
-  }
+  if (anchorSnippet && anchorSnippet.trim().length > 0) {
+    const anchorResult = resolveAnchorToGitHubLocation({
+      anchorSnippet,
+      hunkId: finding.hunkId,
+      hunks,
+      allowFallback: allowFallbackToFirstChangedLine,
+    });
 
-  const anchorResult = resolveAnchorToGitHubLocation({
-    anchorSnippet,
-    hunkId: finding.hunkId,
-    hunks,
-    allowFallback: allowFallbackToFirstChangedLine,
-  });
+    if (anchorResult) {
+      const dedupeKey = `${fileRecord.path}:${anchorResult.line}:${finding.title
+        .trim()
+        .toLowerCase()}`;
 
-  if (!anchorResult) {
-    if (allowFallbackToFirstChangedLine) {
-      // Fallback to first changed line in first hunk
-      const firstHunk = hunks[0];
-      const firstChanged = firstHunk.lines.find((l) => l.type === "add");
-      
-      if (firstChanged?.newLine) {
-        const dedupeKey = `${fileRecord.path}:${firstChanged.newLine}:${finding.title
-          .trim()
-          .toLowerCase()}`;
-
-        return {
-          candidate: {
-            path: fileRecord.path,
-            line: firstChanged.newLine,
-            body: formatInlineCommentBody(finding, firstChanged.newLine),
-            severity: finding.severity,
-            title: finding.title,
-            dedupeKey,
-          },
-        };
-      }
+      return {
+        candidate: {
+          path: fileRecord.path,
+          line: anchorResult.line,
+          body: formatInlineCommentBody(finding, anchorResult.line),
+          severity: finding.severity,
+          title: finding.title,
+          dedupeKey,
+        },
+      };
     }
-    
-    return { reason: "unresolved-line" };
   }
 
-  const dedupeKey = `${fileRecord.path}:${anchorResult.line}:${finding.title
-    .trim()
-    .toLowerCase()}`;
+  // Priority 3: Fallback to first changed line (only if allowed)
+  if (allowFallbackToFirstChangedLine) {
+    const firstHunk = hunks[0];
+    const firstChanged = firstHunk.lines.find((l) => l.type === "add");
+    
+    if (firstChanged?.newLine) {
+      const dedupeKey = `${fileRecord.path}:${firstChanged.newLine}:${finding.title
+        .trim()
+        .toLowerCase()}`;
 
-  return {
-    candidate: {
-      path: fileRecord.path,
-      line: anchorResult.line,
-      body: formatInlineCommentBody(finding, anchorResult.line),
-      severity: finding.severity,
-      title: finding.title,
-      dedupeKey,
-    },
-  };
+      return {
+        candidate: {
+          path: fileRecord.path,
+          line: firstChanged.newLine,
+          body: formatInlineCommentBody(finding, firstChanged.newLine),
+          severity: finding.severity,
+          title: finding.title,
+          dedupeKey,
+        },
+      };
+    }
+  }
+  
+  return { reason: "unresolved-line" };
 }
 
 export function buildInlineReviewComments(

@@ -563,3 +563,195 @@ export function resolveAnchorToGitHubLocation(params: {
 
   return undefined;
 }
+
+/**
+ * Normalizes a line of code for comparison by:
+ * 1. Removing leading +/- markers (diff prefixes)
+ * 2. Normalizing whitespace
+ * 3. Converting to lowercase
+ */
+function normalizeCodeLine(line: string): string {
+  // Remove diff prefixes (+, -, space)
+  let normalized = line.trim();
+  if (normalized.startsWith("+") || normalized.startsWith("-") || normalized.startsWith(" ")) {
+    normalized = normalized.slice(1);
+  }
+  return normalizeSearchText(normalized);
+}
+
+/**
+ * Extracts the core code lines from a code block, removing diff prefixes
+ * and normalizing for comparison.
+ */
+function extractCodeBlockLines(codeBlock: string): string[] {
+  return codeBlock
+    .split(/\r?\n/)
+    .map((line) => normalizeCodeLine(line))
+    .filter((line) => line.length > 0);
+}
+
+/**
+ * Calculates a similarity score between two arrays of normalized lines.
+ * Returns a score between 0 and 1, where 1 is a perfect match.
+ */
+function calculateBlockSimilarity(
+  blockLines: string[],
+  candidateLines: string[],
+): number {
+  if (blockLines.length === 0 || candidateLines.length === 0) {
+    return 0;
+  }
+
+  let matchCount = 0;
+  let totalTokens = 0;
+
+  for (let i = 0; i < blockLines.length; i++) {
+    const blockLine = blockLines[i];
+    // Allow for offset - the candidate might not start at the same relative position
+    const candidateIndex = Math.min(i, candidateLines.length - 1);
+    const candidateLine = candidateLines[candidateIndex];
+
+    const blockTokens = tokenize(blockLine);
+    const candidateTokens = new Set(tokenize(candidateLine));
+
+    totalTokens += blockTokens.length;
+    for (const token of blockTokens) {
+      if (candidateTokens.has(token)) {
+        matchCount += 1;
+      }
+    }
+  }
+
+  return totalTokens > 0 ? matchCount / totalTokens : 0;
+}
+
+export interface CodeBlockMatchResult {
+  line: number;
+  confidence: "exact" | "high" | "medium" | "low";
+  matchedLines: number;
+}
+
+/**
+ * Resolves a multi-line code block to a specific line in the diff.
+ * 
+ * This function takes a code block (3-7 lines) provided by the AI and finds
+ * the best matching location in the diff. It uses a sliding window approach
+ * to find the region with the highest similarity score.
+ * 
+ * @param codeBlock - The code block from the AI (should include +/- prefixes)
+ * @param hunks - The parsed diff hunks
+ * @param preferChangedLines - If true, prefer matching in changed lines (default: true)
+ * @returns The best matching line number and confidence, or undefined if no match
+ */
+export function resolveCodeBlockToLine(params: {
+  codeBlock: string;
+  hunks: StructuredDiffHunk[];
+  preferChangedLines?: boolean;
+}): CodeBlockMatchResult | undefined {
+  const { codeBlock, hunks, preferChangedLines = true } = params;
+
+  if (!codeBlock || codeBlock.trim().length === 0) {
+    return undefined;
+  }
+
+  const blockLines = extractCodeBlockLines(codeBlock);
+  if (blockLines.length === 0) {
+    return undefined;
+  }
+
+  // Collect all lines from the diff with their positions
+  const allDiffLines: Array<{ line: number; text: string; type: "add" | "del" | "context" }> = [];
+  
+  for (const hunk of hunks) {
+    for (const diffLine of hunk.lines) {
+      if (diffLine.newLine !== null) {
+        allDiffLines.push({
+          line: diffLine.newLine,
+          text: diffLine.text,
+          type: diffLine.type,
+        });
+      }
+    }
+  }
+
+  if (allDiffLines.length === 0) {
+    return undefined;
+  }
+
+  // Sort by line number
+  allDiffLines.sort((a, b) => a.line - b.line);
+
+  // Try to find the best matching window
+  let bestMatch: { line: number; score: number; matchedLines: number } | undefined;
+  const windowSize = blockLines.length;
+
+  // Sliding window approach
+  for (let startIdx = 0; startIdx <= allDiffLines.length - windowSize; startIdx++) {
+    const windowLines = allDiffLines.slice(startIdx, startIdx + windowSize);
+    
+    // Check if this window contains changed lines (if we prefer them)
+    const hasChangedLines = windowLines.some((l) => l.type === "add");
+    
+    // Extract text from window
+    const candidateTexts = windowLines.map((l) => l.text);
+    
+    // Calculate similarity
+    const similarity = calculateBlockSimilarity(blockLines, candidateTexts);
+    
+    // Boost score if we prefer changed lines and this window has them
+    const adjustedScore = preferChangedLines && hasChangedLines ? similarity * 1.2 : similarity;
+    
+    if (adjustedScore >= 0.5) {
+      if (!bestMatch || adjustedScore > bestMatch.score) {
+        bestMatch = {
+          line: windowLines[0].line,
+          score: adjustedScore,
+          matchedLines: windowLines.filter((l) => l.type === "add").length || windowLines.length,
+        };
+      }
+    }
+  }
+
+  // Also try matching individual lines for single-line code blocks
+  if (!bestMatch && blockLines.length === 1) {
+    const singleLine = blockLines[0];
+    
+    for (const diffLine of allDiffLines) {
+      if (diffLine.type !== "add") continue;
+      
+      const overlap = tokenOverlapScore(singleLine, diffLine.text);
+      
+      if (overlap.overlaps >= 3 && overlap.score >= 0.5) {
+        if (!bestMatch || overlap.score > bestMatch.score) {
+          bestMatch = {
+            line: diffLine.line,
+            score: overlap.score,
+            matchedLines: 1,
+          };
+        }
+      }
+    }
+  }
+
+  if (!bestMatch) {
+    return undefined;
+  }
+
+  // Determine confidence level
+  let confidence: CodeBlockMatchResult["confidence"];
+  if (bestMatch.score >= 0.9) {
+    confidence = "exact";
+  } else if (bestMatch.score >= 0.75) {
+    confidence = "high";
+  } else if (bestMatch.score >= 0.6) {
+    confidence = "medium";
+  } else {
+    confidence = "low";
+  }
+
+  return {
+    line: bestMatch.line,
+    confidence,
+    matchedLines: bestMatch.matchedLines,
+  };
+}

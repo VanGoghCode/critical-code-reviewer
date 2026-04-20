@@ -86,7 +86,17 @@ export interface ReviewFinding {
   file?: string;
   recommendation?: string;
   suggestion?: string;
+  /**
+   * A short, distinctive code snippet (1-2 words/identifiers) for quick matching.
+   * Used as a fallback when codeBlock is not provided.
+   */
   anchorSnippet?: string;
+  /**
+   * A larger code block (3-7 lines) that the AI is commenting on.
+   * This is the preferred way to locate the exact lines in the diff.
+   * The AI should copy the actual code from the diff, not make up code.
+   */
+  codeBlock?: string;
   hunkId?: string;
 }
 
