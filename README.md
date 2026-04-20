@@ -32,7 +32,7 @@ Each stage has its own specialized persona. The combine stage merges and dedupli
 | `base-url` | No | `https://api-main.aiml.asu.edu/queryV2` | ASU AIML endpoint |
 | `model-provider` | No | `openai` | Provider identifier |
 | `architecture` | No | `single-pass` | Prompt architecture |
-| `post-inline-comments` | No | `false` | Post inline comments on changed lines |
+| `post-inline-comments` | No | `true` | Post inline comments on changed lines |
 | `inline-comment-limit` | No | `10` | Max inline comments per run |
 | `inline-comment-mode` | No | `findings` | `findings` or `file-coverage` |
 | `prompt-root` | No | `prompts` | Custom prompt directory |

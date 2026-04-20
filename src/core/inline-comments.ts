@@ -76,10 +76,14 @@ function normalizePath(pathValue: string): string {
 }
 
 function formatInlineCommentBody(finding: ReviewFinding): string {
-  // Output the detail text directly — no severity prefix, no truncation,
-  // no "Suggestion:" label. The LLM is instructed to keep each detail
-  // to 20-40 words (max 60) including any recommendation.
-  return finding.detail.trim();
+  // Keep inline comments in a predictable structure:
+  // 1) criterion name, 2) issue + impact detail, 3) small suggestion.
+  const recommendation = finding.recommendation ?? finding.suggestion;
+  const lines = [finding.title, finding.detail, recommendation ?? ""]
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  return lines.join("\n");
 }
 
 function sortBySeverity(findings: ReviewFinding[]): ReviewFinding[] {
@@ -155,7 +159,11 @@ function resolveInlineCommentCandidate(params: {
   const resolvedLine = resolveChangedLine({
     patchMap,
     requestedLine: finding.line,
-    searchText: `${finding.title}\n${finding.detail}`,
+    searchText: [
+      finding.title,
+      finding.detail,
+      finding.recommendation ?? finding.suggestion ?? "",
+    ].join("\n"),
     allowFallbackToFirstChangedLine,
   });
 
@@ -222,7 +230,7 @@ export function buildInlineReviewComments(
   const comments: InlineReviewComment[] = [];
 
   const allowFallbackToFirstChangedLine =
-    options.allowFallbackToFirstChangedLine ?? true;
+    options.allowFallbackToFirstChangedLine ?? false;
 
   const candidates: InlineCommentCandidate[] = [];
   for (const finding of sortBySeverity(options.findings)) {

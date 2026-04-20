@@ -217,6 +217,29 @@ class TestParseFindings:
         findings = ccr.parse_findings(response)
         assert len(findings) == 1
 
+    def test_object_with_findings_key_new_contract_fields(self) -> None:
+        response = json.dumps(
+            {
+                "findings": [
+                    {
+                        "file": "src/a.py",
+                        "line": 7,
+                        "severity": "high",
+                        "title": "Fairness",
+                        "detail": "A teacher could over-trust this score for a Black student.",
+                        "recommendation": "Use assignment completion trend instead of proxy fields.",
+                    }
+                ]
+            }
+        )
+        findings = ccr.parse_findings(response)
+        assert len(findings) == 1
+        assert findings[0].path == "src/a.py"
+        assert findings[0].line == 7
+        assert findings[0].severity == "concern"
+        assert "Fairness" in findings[0].body
+        assert "Use assignment completion trend" in findings[0].body
+
     def test_invalid_json_returns_empty(self) -> None:
         findings = ccr.parse_findings("not json at all")
         assert findings == []
@@ -577,14 +600,20 @@ class TestReviewBody:
     def test_output_format_has_tone_instructions(self) -> None:
         output_format = ccr._get_output_format().lower()
         assert "conversational" in output_format
-        assert "i noticed" in output_format or "have you considered" in output_format
+        assert "associated criterion name" in output_format
+        assert "small logic suggestion" in output_format
+        assert "have you thought about" in output_format
+        assert "never use generic `user`" in output_format
         # Severity banned as prefix
         assert "severity field only" in output_format
 
     def test_output_format_example_is_conversational(self) -> None:
-        """The example body in output-format.md should use conversational style."""
+        """The output-format example should show criterion, impact, and suggestion content."""
         output_format = ccr._get_output_format()
-        assert "I noticed" in output_format
+        assert "\"title\":\"Missing Consent Checks for Learner Data\"" in output_format
+        assert "a student" in output_format
+        assert "a teacher" in output_format
+        assert "Authorize by token subject" in output_format
         # Should NOT contain the old bold-label style
         assert "**Warning**" not in output_format
 
@@ -629,17 +658,20 @@ class TestSharedLayers:
         # Layer 3: Stage prompt
         assert "My custom review criteria" in system
         # Layer 4: Humanize
-        assert "20-40 words" in system
+        assert "30-55 words" in system
 
     def test_build_layered_system_prompt_order(self) -> None:
         """Identity must come before persona, persona before stage, stage before humanize."""
         prompt = "MIDDLE_MARKER"
         system = ccr._build_layered_system_prompt(prompt)
-        identity_pos = system.find("code reviewer")
-        persona_pos = system.find("Persona")
+        system_lower = system.lower()
+        persona_pos = system_lower.find("persona file")
         prompt_pos = system.find("MIDDLE_MARKER")
-        humanize_pos = system.find("Writing Quality")
-        assert identity_pos < persona_pos < prompt_pos < humanize_pos
+        humanize_pos = system_lower.find("writing quality requirements")
+        assert persona_pos >= 0
+        assert prompt_pos >= 0
+        assert humanize_pos >= 0
+        assert persona_pos < prompt_pos < humanize_pos
 
     def test_prompt_md_has_no_output_format(self) -> None:
         """single-pass prompt.md should NOT contain output format (moved to output-format.md)."""

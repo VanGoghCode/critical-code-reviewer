@@ -20,9 +20,9 @@ inputs:
     description: GitHub token used for pull request file discovery and inline review comments; pull-requests write is required to post comments.
     required: false
   post-inline-comments:
-    description: Whether to post short inline comments for mapped findings on pull request changed lines.
+    description: Whether to post structured inline comments for mapped findings on pull request changed lines.
     required: false
-    default: "false"
+    default: "true"
   inline-comment-limit:
     description: Maximum number of inline comments to post per pull request run.
     required: false

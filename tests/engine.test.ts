@@ -285,8 +285,8 @@ describe("review engine", () => {
 
     const previousOutputsParsed = stageTwoEnvelope?.previousOutputsParsed;
     expect(Array.isArray(previousOutputsParsed)).toBe(true);
-    expect((previousOutputsParsed as Array<{ summary?: string }>)[0]?.summary).toBe(
-      "Output for stage-1",
-    );
+    expect(
+      (previousOutputsParsed as Array<{ summary?: string }>)[0]?.summary,
+    ).toBe("Output for stage-1");
   });
 });

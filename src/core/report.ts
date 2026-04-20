@@ -5,8 +5,28 @@ import type {
   ReviewModelOutput,
   ReviewReport,
   ReviewRequest,
+  ReviewSeverity,
   StageExecutionResult,
 } from "./types.js";
+
+const REVIEW_SEVERITY_PRIORITY: Record<ReviewSeverity, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+const STAKEHOLDER_CANDIDATES = [
+  "Black student",
+  "English-learner student",
+  "first-generation student",
+  "student",
+  "teacher",
+  "parent",
+  "counselor",
+  "instructor",
+  "administrator",
+  "caregiver",
+] as const;
 
 const findingSchema = z.object({
   severity: z.enum(["low", "medium", "high"]),
@@ -117,6 +137,115 @@ function formatList(values: string[]): string {
   }
 
   return values.map((value) => `- ${value}`).join("\n");
+}
+
+function withArticle(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.startsWith("a ") || normalized.startsWith("an ")) {
+    return value.trim();
+  }
+
+  const article = /^[aeiou]/i.test(value.trim()) ? "an" : "a";
+  return `${article} ${value.trim()}`;
+}
+
+function inferStakeholder(text: string): string {
+  const normalized = text.toLowerCase();
+  for (const candidate of STAKEHOLDER_CANDIDATES) {
+    if (normalized.includes(candidate.toLowerCase())) {
+      return withArticle(candidate);
+    }
+  }
+
+  return "a student, a teacher, or a parent";
+}
+
+function createAssumptionQuestion(finding: ReviewFinding): string {
+  const recommendation = finding.recommendation ?? finding.suggestion ?? "";
+  const stakeholder = inferStakeholder(`${finding.detail} ${recommendation}`);
+  return `When implementing this, have you thought about how this behavior could disadvantage ${stakeholder}?`;
+}
+
+function uniqueNonEmpty(values: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  for (const value of values.map((entry) => entry.trim()).filter(Boolean)) {
+    const key = value.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(value);
+  }
+
+  return unique;
+}
+
+function sortFindingsBySeverity(findings: ReviewFinding[]): ReviewFinding[] {
+  return [...findings].sort((left, right) => {
+    const severityDelta =
+      REVIEW_SEVERITY_PRIORITY[right.severity] -
+      REVIEW_SEVERITY_PRIORITY[left.severity];
+
+    if (severityDelta !== 0) {
+      return severityDelta;
+    }
+
+    return left.title.localeCompare(right.title);
+  });
+}
+
+export function buildReviewConversationBody(
+  report: Pick<ReviewReport, "summary" | "findings" | "notes">,
+): string {
+  const lines: string[] = [report.summary.trim()];
+  const highLevelFindings = sortFindingsBySeverity(report.findings).slice(0, 3);
+
+  for (const finding of highLevelFindings) {
+    const recommendation = finding.recommendation ?? finding.suggestion;
+    lines.push("", finding.title.trim(), finding.detail.trim());
+    if (recommendation && recommendation.trim().length > 0) {
+      lines.push(recommendation.trim());
+    }
+  }
+
+  const noteQuestions = report.notes
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.includes("?"));
+
+  const generatedQuestions = highLevelFindings
+    .slice(0, 2)
+    .map((finding) => createAssumptionQuestion(finding));
+
+  const fallbackQuestions =
+    highLevelFindings.length > 0
+      ? [
+          ...generatedQuestions,
+          "Have you thought about what evidence a teacher and a student would need to contest this decision if the model is wrong?",
+        ]
+      : [];
+
+  const questions = uniqueNonEmpty([
+    ...noteQuestions,
+    ...fallbackQuestions,
+  ]).slice(0, 3);
+
+  for (const question of questions) {
+    lines.push("", question);
+  }
+
+  return lines
+    .filter((line, index, values) => {
+      if (line.length > 0) {
+        return true;
+      }
+
+      const previous = values[index - 1];
+      return previous !== "";
+    })
+    .join("\n");
 }
 
 export function renderReviewMarkdown(params: {

@@ -1,5 +1,5 @@
-import { parseReviewModelOutput, renderReviewMarkdown } from "./report.js";
 import { readPromptText } from "./prompt-loader.js";
+import { parseReviewModelOutput, renderReviewMarkdown } from "./report.js";
 import type {
   LoadedPromptArchitecture,
   ReviewLogger,
@@ -173,9 +173,8 @@ function createMessages(params: {
     params.maxContextChars,
   );
   const outputFormat = params.sharedLayers.outputFormat.trim();
-  const userContent = outputFormat.length > 0
-    ? `${envelope}\n\n${outputFormat}`
-    : envelope;
+  const userContent =
+    outputFormat.length > 0 ? `${envelope}\n\n${outputFormat}` : envelope;
   messages.push({ role: "user", content: userContent });
 
   return messages;
@@ -370,7 +369,9 @@ export async function runReviewArchitecture(params: {
   const { architecture, request, provider, logger } = params;
   const runStartedAtMs = Date.now();
   const maxContextChars = params.maxContextChars ?? 12000;
-  const sharedLayers = params.sharedLayers ?? await loadSharedLayers(params.promptRoot ?? "prompts");
+  const sharedLayers =
+    params.sharedLayers ??
+    (await loadSharedLayers(params.promptRoot ?? "prompts"));
   logger.info("Starting review run", {
     architectureId: architecture.id,
     mode: architecture.mode,
@@ -543,9 +544,7 @@ export async function runReviewArchitecture(params: {
 
   const combineStage = architecture.combineStage;
   if (!combineStage) {
-    throw new Error(
-      `Parallel architecture requires a combine stage.`,
-    );
+    throw new Error("Parallel architecture requires a combine stage.");
   }
 
   const combineResult = await executeStage({

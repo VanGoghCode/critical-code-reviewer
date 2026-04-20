@@ -97,7 +97,7 @@ function getRetryDelayMs(attempt: number, response?: Response): number {
     }
   }
 
-  return RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+  return RETRY_BASE_DELAY_MS * 2 ** attempt;
 }
 
 function waitForDelay(milliseconds: number): Promise<void> {
@@ -163,7 +163,8 @@ export async function requestAsuAimlChatCompletion(
 
       return parseAsuAimlResponse(rawBody);
     } catch (error) {
-      const isAbort = error instanceof DOMException && error.name === "AbortError";
+      const isAbort =
+        error instanceof DOMException && error.name === "AbortError";
       if (isAbort) {
         throw new Error(
           `ASU AIML request timed out after ${config.timeoutMs}ms.`,

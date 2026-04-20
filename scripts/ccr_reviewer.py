@@ -675,10 +675,29 @@ def parse_findings(response_text: str) -> list[Finding]:
     for item in items:
         if not isinstance(item, dict):
             continue
-        path = item.get("path", "")
+        path = item.get("path", item.get("file", ""))
         line_raw = item.get("line", 0)
-        body = item.get("body", "")
-        severity = item.get("severity", "info")
+
+        body_raw = item.get("body")
+        if body_raw is None:
+            title = str(item.get("title", "")).strip()
+            detail = str(item.get("detail", "")).strip()
+            recommendation = str(
+                item.get("recommendation", item.get("suggestion", ""))
+            ).strip()
+            body = "\n".join(
+                part for part in (title, detail, recommendation) if part
+            )
+        else:
+            body = str(body_raw)
+
+        raw_severity = str(item.get("severity", "info")).lower()
+        if raw_severity in {"high", "critical", "concern"}:
+            severity = "concern"
+        elif raw_severity in {"medium", "warning"}:
+            severity = "warning"
+        else:
+            severity = "info"
 
         # Coerce line to int (LLM may return string)
         try:
@@ -693,8 +712,8 @@ def parse_findings(response_text: str) -> list[Finding]:
             Finding(
                 path=str(path),
                 line=line,
-                body=str(body),
-                severity=str(severity).lower(),
+                body=body,
+                severity=severity,
             )
         )
 
@@ -902,19 +921,11 @@ def resolve_changed_line(
 # Inline comment building
 # ---------------------------------------------------------------------------
 
-MAX_INLINE_DETAIL_CHARS = 2000
-
 # Regex to strip any severity prefix the LLM might still add to body text
 _SEVERITY_PREFIX_RE = re.compile(
     r"^\s*\[(?:HIGH|MEDIUM|LOW|INFO|WARNING|CONCERN|CRITICAL)\]\s*",
     re.IGNORECASE,
 )
-
-
-def _clamp_text(value: str, max_length: int) -> str:
-    if len(value) <= max_length:
-        return value
-    return value[: max(1, max_length - 3)].rstrip() + "..."
 
 
 def _normalize_path(path_value: str) -> str:
@@ -991,10 +1002,7 @@ def build_inline_comments(
         if resolved is None:
             continue
 
-        body = _clamp_text(
-            _SEVERITY_PREFIX_RE.sub("", finding.body.strip()),
-            MAX_INLINE_DETAIL_CHARS,
-        )
+        body = _SEVERITY_PREFIX_RE.sub("", finding.body.strip())
         dedupe_key = f"{file_record.filename}:{resolved}:{body.lower()}"
 
         candidates.append((file_record.filename, resolved, body, finding.severity, dedupe_key))

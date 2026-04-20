@@ -25655,6 +25655,44 @@ function createAsuAimlProviderConfig(input) {
   };
 }
 
+// src/core/prompt-loader.ts
+var import_promises = require("node:fs/promises");
+var import_node_path = __toESM(require("node:path"), 1);
+var ACTION_ENTRY_FILE_PATTERN = /^index\.(cjs|js|mjs)$/;
+function resolveActionBundleRootFromEntry(entryPath) {
+  if (!entryPath) {
+    return void 0;
+  }
+  const normalizedEntryPath = import_node_path.default.resolve(entryPath);
+  const entryDir = import_node_path.default.dirname(normalizedEntryPath);
+  const entryName = import_node_path.default.basename(normalizedEntryPath);
+  if (import_node_path.default.basename(entryDir) !== "dist") {
+    return void 0;
+  }
+  if (!ACTION_ENTRY_FILE_PATTERN.test(entryName)) {
+    return void 0;
+  }
+  return import_node_path.default.resolve(entryDir, "..");
+}
+function resolvePromptRoot(promptRoot = "prompts", options) {
+  if (import_node_path.default.isAbsolute(promptRoot)) {
+    return promptRoot;
+  }
+  const githubActionPath = options?.githubActionPath ?? process.env.GITHUB_ACTION_PATH;
+  if (githubActionPath && githubActionPath.trim().length > 0) {
+    return import_node_path.default.resolve(githubActionPath, promptRoot);
+  }
+  const actionBundleRoot = resolveActionBundleRootFromEntry(
+    options?.entryPath ?? process.argv[1]
+  );
+  const baseDir = actionBundleRoot ?? options?.cwd ?? process.cwd();
+  return import_node_path.default.resolve(baseDir, promptRoot);
+}
+async function readPromptText(promptRoot, promptPath) {
+  const absolutePath = import_node_path.default.resolve(promptRoot, promptPath);
+  return (0, import_promises.readFile)(absolutePath, "utf8");
+}
+
 // node_modules/zod/v3/external.js
 var external_exports = {};
 __export(external_exports, {
@@ -29697,6 +29735,23 @@ var coerce = {
 var NEVER = INVALID;
 
 // src/core/report.ts
+var REVIEW_SEVERITY_PRIORITY = {
+  high: 3,
+  medium: 2,
+  low: 1
+};
+var STAKEHOLDER_CANDIDATES = [
+  "Black student",
+  "English-learner student",
+  "first-generation student",
+  "student",
+  "teacher",
+  "parent",
+  "counselor",
+  "instructor",
+  "administrator",
+  "caregiver"
+];
 var findingSchema = external_exports.object({
   severity: external_exports.enum(["low", "medium", "high"]),
   title: external_exports.string().min(1),
@@ -29783,6 +29838,81 @@ function formatList(values) {
   }
   return values.map((value) => `- ${value}`).join("\n");
 }
+function withArticle(value) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.startsWith("a ") || normalized.startsWith("an ")) {
+    return value.trim();
+  }
+  const article = /^[aeiou]/i.test(value.trim()) ? "an" : "a";
+  return `${article} ${value.trim()}`;
+}
+function inferStakeholder(text) {
+  const normalized = text.toLowerCase();
+  for (const candidate of STAKEHOLDER_CANDIDATES) {
+    if (normalized.includes(candidate.toLowerCase())) {
+      return withArticle(candidate);
+    }
+  }
+  return "a student, a teacher, or a parent";
+}
+function createAssumptionQuestion(finding) {
+  const recommendation = finding.recommendation ?? finding.suggestion ?? "";
+  const stakeholder = inferStakeholder(`${finding.detail} ${recommendation}`);
+  return `When implementing this, have you thought about how this behavior could disadvantage ${stakeholder}?`;
+}
+function uniqueNonEmpty(values) {
+  const seen = /* @__PURE__ */ new Set();
+  const unique = [];
+  for (const value of values.map((entry) => entry.trim()).filter(Boolean)) {
+    const key = value.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(value);
+  }
+  return unique;
+}
+function sortFindingsBySeverity(findings) {
+  return [...findings].sort((left, right) => {
+    const severityDelta = REVIEW_SEVERITY_PRIORITY[right.severity] - REVIEW_SEVERITY_PRIORITY[left.severity];
+    if (severityDelta !== 0) {
+      return severityDelta;
+    }
+    return left.title.localeCompare(right.title);
+  });
+}
+function buildReviewConversationBody(report) {
+  const lines = [report.summary.trim()];
+  const highLevelFindings = sortFindingsBySeverity(report.findings).slice(0, 3);
+  for (const finding of highLevelFindings) {
+    const recommendation = finding.recommendation ?? finding.suggestion;
+    lines.push("", finding.title.trim(), finding.detail.trim());
+    if (recommendation && recommendation.trim().length > 0) {
+      lines.push(recommendation.trim());
+    }
+  }
+  const noteQuestions = report.notes.map((entry) => entry.trim()).filter((entry) => entry.includes("?"));
+  const generatedQuestions = highLevelFindings.slice(0, 2).map((finding) => createAssumptionQuestion(finding));
+  const fallbackQuestions = highLevelFindings.length > 0 ? [
+    ...generatedQuestions,
+    "Have you thought about what evidence a teacher and a student would need to contest this decision if the model is wrong?"
+  ] : [];
+  const questions = uniqueNonEmpty([
+    ...noteQuestions,
+    ...fallbackQuestions
+  ]).slice(0, 3);
+  for (const question of questions) {
+    lines.push("", question);
+  }
+  return lines.filter((line, index, values) => {
+    if (line.length > 0) {
+      return true;
+    }
+    const previous = values[index - 1];
+    return previous !== "";
+  }).join("\n");
+}
 function renderReviewMarkdown(params) {
   const {
     architecture,
@@ -29863,44 +29993,6 @@ function renderReviewMarkdown(params) {
     markdown,
     rawModelOutput: rawOutput
   };
-}
-
-// src/core/prompt-loader.ts
-var import_promises = require("node:fs/promises");
-var import_node_path = __toESM(require("node:path"), 1);
-var ACTION_ENTRY_FILE_PATTERN = /^index\.(cjs|js|mjs)$/;
-function resolveActionBundleRootFromEntry(entryPath) {
-  if (!entryPath) {
-    return void 0;
-  }
-  const normalizedEntryPath = import_node_path.default.resolve(entryPath);
-  const entryDir = import_node_path.default.dirname(normalizedEntryPath);
-  const entryName = import_node_path.default.basename(normalizedEntryPath);
-  if (import_node_path.default.basename(entryDir) !== "dist") {
-    return void 0;
-  }
-  if (!ACTION_ENTRY_FILE_PATTERN.test(entryName)) {
-    return void 0;
-  }
-  return import_node_path.default.resolve(entryDir, "..");
-}
-function resolvePromptRoot(promptRoot = "prompts", options) {
-  if (import_node_path.default.isAbsolute(promptRoot)) {
-    return promptRoot;
-  }
-  const githubActionPath = options?.githubActionPath ?? process.env.GITHUB_ACTION_PATH;
-  if (githubActionPath && githubActionPath.trim().length > 0) {
-    return import_node_path.default.resolve(githubActionPath, promptRoot);
-  }
-  const actionBundleRoot = resolveActionBundleRootFromEntry(
-    options?.entryPath ?? process.argv[1]
-  );
-  const baseDir = actionBundleRoot ?? options?.cwd ?? process.cwd();
-  return import_node_path.default.resolve(baseDir, promptRoot);
-}
-async function readPromptText(promptRoot, promptPath) {
-  const absolutePath = import_node_path.default.resolve(promptRoot, promptPath);
-  return (0, import_promises.readFile)(absolutePath, "utf8");
 }
 
 // src/core/engine.ts
@@ -30295,9 +30387,7 @@ async function runReviewArchitecture(params) {
   stageOutputs.push(...parallelStageOutputs);
   const combineStage = architecture.combineStage;
   if (!combineStage) {
-    throw new Error(
-      `Parallel architecture requires a combine stage.`
-    );
+    throw new Error("Parallel architecture requires a combine stage.");
   }
   const combineResult = await executeStage({
     architecture,
@@ -30961,18 +31051,27 @@ function resolveChangedLine(params) {
     return void 0;
   }
   const changedLineSet = new Set(patchMap.changedLines);
+  let roundedRequestedLine;
+  let closestRequestedLine;
+  let closestRequestedDistance = Number.POSITIVE_INFINITY;
   if (typeof requestedLine === "number" && Number.isFinite(requestedLine)) {
-    const rounded = Math.round(requestedLine);
-    if (changedLineSet.has(rounded)) {
-      return rounded;
+    roundedRequestedLine = Math.round(requestedLine);
+    if (changedLineSet.has(roundedRequestedLine)) {
+      return roundedRequestedLine;
     }
-    return closestLine(rounded, patchMap.changedLines);
+    const closest = closestLine(roundedRequestedLine, patchMap.changedLines);
+    if (typeof closest === "number") {
+      closestRequestedLine = closest;
+      closestRequestedDistance = Math.abs(closest - roundedRequestedLine);
+    }
   }
   if (searchText && searchText.trim().length > 0) {
     const candidates = extractSearchCandidates(searchText);
+    const exactMatchLines = /* @__PURE__ */ new Set();
     let bestLine;
     let bestScore = 0;
     let bestOverlap = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
     for (const candidate of candidates) {
       for (const [
         line,
@@ -30980,24 +31079,39 @@ function resolveChangedLine(params) {
       ] of patchMap.changedLineContentByLine.entries()) {
         const normalizedLine = normalizeSearchText(content);
         if (normalizedLine.includes(candidate) || candidate.length >= 12 && candidate.includes(normalizedLine)) {
-          return line;
+          exactMatchLines.add(line);
+          continue;
         }
         const overlap = tokenOverlapScore(candidate, normalizedLine);
-        if (overlap.overlaps > bestOverlap || overlap.overlaps === bestOverlap && overlap.score > bestScore) {
+        const distance = typeof roundedRequestedLine === "number" ? Math.abs(line - roundedRequestedLine) : Number.POSITIVE_INFINITY;
+        if (overlap.overlaps > bestOverlap || overlap.overlaps === bestOverlap && overlap.score > bestScore || overlap.overlaps === bestOverlap && overlap.score === bestScore && distance < bestDistance) {
           bestLine = line;
           bestScore = overlap.score;
           bestOverlap = overlap.overlaps;
+          bestDistance = distance;
         }
       }
     }
-    if (bestLine && bestOverlap >= 2 && bestScore >= 0.2) {
+    if (exactMatchLines.size > 0) {
+      const sortedExactMatches = Array.from(exactMatchLines).sort(
+        (left, right) => left - right
+      );
+      if (typeof roundedRequestedLine === "number") {
+        return closestLine(roundedRequestedLine, sortedExactMatches) ?? sortedExactMatches[0];
+      }
+      return sortedExactMatches[0];
+    }
+    if (bestLine && bestOverlap >= 3 && bestScore >= 0.35) {
       return bestLine;
     }
+  }
+  if (closestRequestedLine && closestRequestedDistance <= 2) {
+    return closestRequestedLine;
   }
   if (!allowFallbackToFirstChangedLine) {
     return void 0;
   }
-  return patchMap.changedLines[0];
+  return closestRequestedLine ?? patchMap.changedLines[0];
 }
 
 // src/core/inline-comments.ts
@@ -31019,7 +31133,9 @@ function normalizePath2(pathValue) {
   return pathValue.replaceAll("\\", "/").trim().toLowerCase();
 }
 function formatInlineCommentBody(finding) {
-  return finding.detail.trim();
+  const recommendation = finding.recommendation ?? finding.suggestion;
+  const lines = [finding.title, finding.detail, recommendation ?? ""].map((value) => value.trim()).filter((value) => value.length > 0);
+  return lines.join("\n");
 }
 function sortBySeverity(findings) {
   return [...findings].sort((left, right) => {
@@ -31067,8 +31183,11 @@ function resolveInlineCommentCandidate(params) {
   const resolvedLine = resolveChangedLine({
     patchMap,
     requestedLine: finding.line,
-    searchText: `${finding.title}
-${finding.detail}`,
+    searchText: [
+      finding.title,
+      finding.detail,
+      finding.recommendation ?? finding.suggestion ?? ""
+    ].join("\n"),
     allowFallbackToFirstChangedLine
   });
   if (typeof resolvedLine !== "number") {
@@ -31116,7 +31235,7 @@ function buildInlineReviewComments(options) {
   const patchCache = /* @__PURE__ */ new Map();
   const commentKeys = /* @__PURE__ */ new Set();
   const comments = [];
-  const allowFallbackToFirstChangedLine = options.allowFallbackToFirstChangedLine ?? true;
+  const allowFallbackToFirstChangedLine = options.allowFallbackToFirstChangedLine ?? false;
   const candidates = [];
   for (const finding of sortBySeverity(options.findings)) {
     const resolution = resolveInlineCommentCandidate({
@@ -31259,7 +31378,7 @@ function getRetryDelayMs(attempt, response) {
       }
     }
   }
-  return RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+  return RETRY_BASE_DELAY_MS * 2 ** attempt;
 }
 function waitForDelay2(milliseconds) {
   return new Promise((resolve) => {
@@ -31550,7 +31669,7 @@ async function main() {
       "exclude-globs",
       "node_modules/**,dist/**,coverage/**,.git/**"
     );
-    const postInlineComments = readBooleanInput("post-inline-comments", false);
+    const postInlineComments = readBooleanInput("post-inline-comments", true);
     const inlineCommentLimit = readIntegerInput("inline-comment-limit", 10);
     const inlineCommentMode = readInlineCommentStrategyInput(
       "inline-comment-mode",
@@ -31645,7 +31764,8 @@ async function main() {
           findings: result.report.findings,
           files,
           maxComments: inlineCommentLimit,
-          strategy: inlineCommentMode
+          strategy: inlineCommentMode,
+          allowFallbackToFirstChangedLine: false
         });
         inlineCommentsSkipped = inlineCommentResult.skippedCount;
         if (inlineCommentResult.comments.length === 0) {
@@ -31674,7 +31794,7 @@ async function main() {
               pullNumber: pullRequestNumber,
               commitId: getPullRequestHeadSha(),
               comments: inlineCommentResult.comments,
-              reviewBody: result.report.summary
+              reviewBody: buildReviewConversationBody(result.report)
             });
             inlineCommentsPosted = publishResult.postedCount;
             logger.info("Inline review comments posted.", {

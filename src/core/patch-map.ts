@@ -208,21 +208,30 @@ export function resolveChangedLine(params: {
   }
 
   const changedLineSet = new Set<number>(patchMap.changedLines);
+  let roundedRequestedLine: number | undefined;
+  let closestRequestedLine: number | undefined;
+  let closestRequestedDistance = Number.POSITIVE_INFINITY;
 
   if (typeof requestedLine === "number" && Number.isFinite(requestedLine)) {
-    const rounded = Math.round(requestedLine);
-    if (changedLineSet.has(rounded)) {
-      return rounded;
+    roundedRequestedLine = Math.round(requestedLine);
+    if (changedLineSet.has(roundedRequestedLine)) {
+      return roundedRequestedLine;
     }
 
-    return closestLine(rounded, patchMap.changedLines);
+    const closest = closestLine(roundedRequestedLine, patchMap.changedLines);
+    if (typeof closest === "number") {
+      closestRequestedLine = closest;
+      closestRequestedDistance = Math.abs(closest - roundedRequestedLine);
+    }
   }
 
   if (searchText && searchText.trim().length > 0) {
     const candidates = extractSearchCandidates(searchText);
+    const exactMatchLines = new Set<number>();
     let bestLine: number | undefined;
     let bestScore = 0;
     let bestOverlap = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
 
     for (const candidate of candidates) {
       for (const [
@@ -234,29 +243,58 @@ export function resolveChangedLine(params: {
           normalizedLine.includes(candidate) ||
           (candidate.length >= 12 && candidate.includes(normalizedLine))
         ) {
-          return line;
+          exactMatchLines.add(line);
+          continue;
         }
 
         const overlap = tokenOverlapScore(candidate, normalizedLine);
+        const distance =
+          typeof roundedRequestedLine === "number"
+            ? Math.abs(line - roundedRequestedLine)
+            : Number.POSITIVE_INFINITY;
         if (
           overlap.overlaps > bestOverlap ||
-          (overlap.overlaps === bestOverlap && overlap.score > bestScore)
+          (overlap.overlaps === bestOverlap && overlap.score > bestScore) ||
+          (overlap.overlaps === bestOverlap &&
+            overlap.score === bestScore &&
+            distance < bestDistance)
         ) {
           bestLine = line;
           bestScore = overlap.score;
           bestOverlap = overlap.overlaps;
+          bestDistance = distance;
         }
       }
     }
 
-    if (bestLine && bestOverlap >= 2 && bestScore >= 0.2) {
+    if (exactMatchLines.size > 0) {
+      const sortedExactMatches = Array.from(exactMatchLines).sort(
+        (left, right) => left - right,
+      );
+
+      if (typeof roundedRequestedLine === "number") {
+        return (
+          closestLine(roundedRequestedLine, sortedExactMatches) ??
+          sortedExactMatches[0]
+        );
+      }
+
+      return sortedExactMatches[0];
+    }
+
+    if (bestLine && bestOverlap >= 3 && bestScore >= 0.35) {
       return bestLine;
     }
+  }
+
+  // Allow minor off-by-one/two drift from the model, but avoid long-distance remaps.
+  if (closestRequestedLine && closestRequestedDistance <= 2) {
+    return closestRequestedLine;
   }
 
   if (!allowFallbackToFirstChangedLine) {
     return undefined;
   }
 
-  return patchMap.changedLines[0];
+  return closestRequestedLine ?? patchMap.changedLines[0];
 }

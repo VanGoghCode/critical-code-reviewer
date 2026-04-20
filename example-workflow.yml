@@ -73,8 +73,8 @@ jobs:
           architecture: single-pass
 
           # ── Inline comments ───────────────────────────────────────
-          # Post short review comments on specific PR lines.
-          # Default: "false"
+          # Post structured review comments on specific PR lines.
+          # Default: "true"
           post-inline-comments: "true"
 
           # Cap on inline comments per run to avoid noisy PRs.

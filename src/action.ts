@@ -21,6 +21,7 @@ import { createAsuAimlProvider } from "./core/llm.js";
 import { createLogger } from "./core/logging.js";
 import { loadArchitectureById } from "./core/manifest.js";
 import { resolvePromptRoot } from "./core/prompt-loader.js";
+import { buildReviewConversationBody } from "./core/report.js";
 
 function readCsvInput(name: string, fallback: string): string[] {
   const raw = core.getInput(name) || fallback;
@@ -154,7 +155,7 @@ async function main(): Promise<void> {
       "exclude-globs",
       "node_modules/**,dist/**,coverage/**,.git/**",
     );
-    const postInlineComments = readBooleanInput("post-inline-comments", false);
+    const postInlineComments = readBooleanInput("post-inline-comments", true);
     const inlineCommentLimit = readIntegerInput("inline-comment-limit", 10);
     const inlineCommentMode = readInlineCommentStrategyInput(
       "inline-comment-mode",
@@ -267,6 +268,7 @@ async function main(): Promise<void> {
           files,
           maxComments: inlineCommentLimit,
           strategy: inlineCommentMode,
+          allowFallbackToFirstChangedLine: false,
         });
         inlineCommentsSkipped = inlineCommentResult.skippedCount;
 
@@ -296,7 +298,7 @@ async function main(): Promise<void> {
               pullNumber: pullRequestNumber,
               commitId: getPullRequestHeadSha(),
               comments: inlineCommentResult.comments,
-              reviewBody: result.report.summary,
+              reviewBody: buildReviewConversationBody(result.report),
             });
 
             inlineCommentsPosted = publishResult.postedCount;
