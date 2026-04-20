@@ -31060,6 +31060,33 @@ function parseUnifiedDiffPatch(patch) {
     allVisibleLineContentByLine
   };
 }
+function runFuzzySearch(candidates, lineMap, roundedRequestedLine) {
+  const exactMatchLines = /* @__PURE__ */ new Set();
+  let bestLine;
+  let bestScore = 0;
+  let bestOverlap = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const candidate of candidates) {
+    for (const [line, content] of lineMap.entries()) {
+      const normalizedLine = normalizeSearchText(content);
+      if (normalizedLine.includes(candidate) || candidate.length >= 12 && candidate.includes(normalizedLine)) {
+        exactMatchLines.add(line);
+        continue;
+      }
+      const overlap = tokenOverlapScore(candidate, normalizedLine);
+      const distance = typeof roundedRequestedLine === "number" ? Math.abs(line - roundedRequestedLine) : Number.POSITIVE_INFINITY;
+      const isBetter = overlap.overlaps > bestOverlap || overlap.overlaps === bestOverlap && overlap.score > bestScore || overlap.overlaps === bestOverlap && overlap.score === bestScore && distance < bestDistance;
+      const isEquivalentButCloser = overlap.overlaps === bestOverlap && Math.abs(overlap.score - bestScore) < 0.05 && distance < bestDistance;
+      if (isBetter || isEquivalentButCloser) {
+        bestLine = line;
+        bestScore = overlap.score;
+        bestOverlap = overlap.overlaps;
+        bestDistance = distance;
+      }
+    }
+  }
+  return { exactMatchLines, bestLine, bestScore, bestOverlap };
+}
 function resolveChangedLine(params) {
   const {
     patchMap,
@@ -31084,31 +31111,19 @@ function resolveChangedLine(params) {
   }
   if (searchText && searchText.trim().length > 0) {
     const candidates = extractSearchCandidates(searchText);
-    const exactMatchLines = /* @__PURE__ */ new Set();
-    let bestLine;
-    let bestScore = 0;
-    let bestOverlap = 0;
-    let bestDistance = Number.POSITIVE_INFINITY;
-    for (const candidate of candidates) {
-      for (const [
-        line,
-        content
-      ] of patchMap.allVisibleLineContentByLine.entries()) {
-        const normalizedLine = normalizeSearchText(content);
-        if (normalizedLine.includes(candidate) || candidate.length >= 12 && candidate.includes(normalizedLine)) {
-          exactMatchLines.add(line);
-          continue;
-        }
-        const overlap = tokenOverlapScore(candidate, normalizedLine);
-        const distance = typeof roundedRequestedLine === "number" ? Math.abs(line - roundedRequestedLine) : Number.POSITIVE_INFINITY;
-        if (overlap.overlaps > bestOverlap || overlap.overlaps === bestOverlap && overlap.score > bestScore || overlap.overlaps === bestOverlap && overlap.score === bestScore && distance < bestDistance) {
-          bestLine = line;
-          bestScore = overlap.score;
-          bestOverlap = overlap.overlaps;
-          bestDistance = distance;
-        }
-      }
+    let result = runFuzzySearch(
+      candidates,
+      patchMap.changedLineContentByLine,
+      roundedRequestedLine
+    );
+    if (result.exactMatchLines.size === 0 && (!result.bestLine || result.bestOverlap < 3)) {
+      result = runFuzzySearch(
+        candidates,
+        patchMap.allVisibleLineContentByLine,
+        roundedRequestedLine
+      );
     }
+    const { exactMatchLines, bestLine, bestScore, bestOverlap } = result;
     if (exactMatchLines.size > 0) {
       const sortedExactMatches = Array.from(exactMatchLines).sort(
         (left, right) => left - right
@@ -31208,14 +31223,14 @@ function resolveInlineCommentCandidate(params) {
   if (patchMap.changedLines.length === 0) {
     return { reason: "no-changed-lines" };
   }
+  const searchText = [
+    finding.detail,
+    finding.title
+  ].filter(Boolean).join("\n");
   const resolvedLine = resolveChangedLine({
     patchMap,
     requestedLine: finding.line,
-    searchText: [
-      finding.title,
-      finding.detail,
-      finding.recommendation ?? finding.suggestion ?? ""
-    ].join("\n"),
+    searchText,
     allowFallbackToFirstChangedLine
   });
   if (typeof resolvedLine !== "number") {

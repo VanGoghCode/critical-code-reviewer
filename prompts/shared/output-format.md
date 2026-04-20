@@ -17,7 +17,7 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
     {
       "severity": "low | medium | high",
       "title": "Associated criterion name only (for example: Fairness, Missing Consent Checks for Learner Data, Opaque AI Decision Outputs)",
-      "detail": "30-55 words, conversational, 2-3 complete sentences. Explain the concrete issue, then explain why it matters, who it impacts, and how. Name specific people (for example: a student, a teacher, a parent, a Black student), never generic 'user(s)'.",
+      "detail": "30-55 words, conversational, 2-3 complete sentences. **Start with the exact code element being flagged** (e.g., 'The `risk_score` field...' or 'The `validateUser()` function...'). Explain the concrete issue, then explain why it matters, who it impacts, and how. Name specific people (for example: a student, a teacher, a parent, a Black student), never generic 'user(s)'.",
       "file": "exact file path from the diff (required)",
       "line": 42,
       "recommendation": "Small logic suggestion in one plain but polite sentence (15-25 words), no label prefix, followed by a CCR reference link on a new line: 📎 [CRIT-X.Y](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-x-y)"
@@ -34,11 +34,11 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
 - `riskLevel`: `low` = no warnings or flags, `medium` = warnings present, `high` = one or more flags must be resolved before merge.
 - `findings`: One entry per issue found. Each finding **MUST** include:
   - `title`: The associated framework criterion name (or closest criterion family). Do not use generic issue labels.
-  - `detail`: 30-55 words, complete sentences. Include both issue evidence and impact (why it matters, who is affected, and how).
+  - `detail`: 30-55 words, complete sentences. **CRITICAL: Start with the exact code snippet, variable name, function name, or field name from the diff** (e.g., "The `risk_score` field in the Alert interface..." or "The `getAlerts()` function call..."). Then explain the concrete issue, why it matters, who is affected, and how. Use specific stakeholder language: `a student`, `a teacher`, `a parent`, `a counselor`, `a Black student`, `an English-learner student`, etc. Never use generic `user` or `users`.
   - Use specific stakeholder language: `a student`, `a teacher`, `a parent`, `a counselor`, `a Black student`, `an English-learner student`, etc.
   - Never use generic `user` or `users` in summary, detail, recommendation, todos, or notes.
   - `file`: Exact path from the diff input (required — never omit).
-  - `line`: Integer line number in the new file, pointing to an added or changed line (required — never omit).
+  - `line`: Integer line number in the new file, pointing to an added or changed line (required — never omit). **This must be the exact line where the problematic code appears, not an approximate location.**
   - `severity`: "low" | "medium" | "high". This goes in the severity field only — never include it as a prefix in the text.
   - `recommendation`: One small logic suggestion in plain but polite language, no label prefix, followed by a CCR reference link on a new line in the format: `📎 [CRIT-X.Y · Criterion Name](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-x-y)` where X.Y matches the criterion ID from the framework.
 - `todos`: Action items for the PR author.
@@ -67,6 +67,13 @@ Runtime posts one broader main review comment that combines:
 - If no issues found, return findings as an empty array [].
 - Each finding must map to a real changed line in the diff.
 - Do not fabricate line numbers or file paths.
+- **CRITICAL LINE NUMBER ACCURACY:**
+  - Look at the `patch` field in each file - it shows the exact changed lines with `+` prefix
+  - The `line` number must point to a line that was added or modified (has a `+` in the patch)
+  - The code element you mention in `detail` (e.g., `risk_score`) must actually appear on or near that line number in the patch
+  - If you mention multiple code elements, choose the line number of the most important one
+  - When in doubt, reference the line number from the patch diff, not the full file content
+- **Include the actual code element (variable name, function name, field name) at the start of the `detail` field to ensure accurate line mapping.**
 - Use reviewContext.commitMessages to understand intent and flag mismatches.
 - If previousOutputsParsed is present, use it as the authoritative previous-stage context.
 

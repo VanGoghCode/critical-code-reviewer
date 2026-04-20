@@ -164,8 +164,8 @@ function resolveInlineCommentCandidate(params: {
   }
 
   const searchText = [
+    finding.detail,
     finding.title,
-    finding.recommendation ?? finding.suggestion ?? "",
   ]
     .filter(Boolean)
     .join("\n");
