@@ -29757,10 +29757,11 @@ var findingSchema = external_exports.object({
   title: external_exports.string().min(1),
   detail: external_exports.string().min(1),
   file: external_exports.string().optional(),
-  line: external_exports.number().int().positive().optional(),
-  endLine: external_exports.number().int().positive().optional(),
   recommendation: external_exports.string().optional(),
-  suggestion: external_exports.string().optional()
+  suggestion: external_exports.string().optional(),
+  anchorSnippet: external_exports.string().optional(),
+  hunkId: external_exports.string().optional(),
+  line: external_exports.number().int().positive().optional()
 });
 var modelOutputSchema = external_exports.object({
   summary: external_exports.string().min(1),
@@ -29823,7 +29824,7 @@ function formatFindings(findings) {
     return "No findings were returned by the review model.";
   }
   return findings.map((finding) => {
-    const lineLocation = typeof finding.line === "number" ? typeof finding.endLine === "number" && finding.endLine > finding.line ? `:${finding.line}-${finding.endLine}` : `:${finding.line}` : "";
+    const lineLocation = typeof finding.line === "number" ? `:${finding.line}` : "";
     const location = finding.file ? ` (${finding.file}${lineLocation})` : "";
     const recommendation = finding.recommendation ?? finding.suggestion;
     const recommendationLine = recommendation ? `
