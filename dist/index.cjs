@@ -30981,7 +30981,9 @@ function parseUnifiedDiffPatch(patch) {
     return {
       hunks: [],
       changedLines: [],
-      changedLineContentByLine: /* @__PURE__ */ new Map()
+      changedLineContentByLine: /* @__PURE__ */ new Map(),
+      allVisibleLines: [],
+      allVisibleLineContentByLine: /* @__PURE__ */ new Map()
     };
   }
   const lines = patch.split(/\r?\n/);
@@ -30998,7 +31000,9 @@ function parseUnifiedDiffPatch(patch) {
       newStart: toPositiveInt(match[3], 0),
       newCount: toPositiveInt(match[4], 1),
       changedLines: [],
-      changedLineContents: []
+      changedLineContents: [],
+      contextLines: [],
+      contextLineContents: []
     };
     let currentLine = hunk.newStart;
     for (index += 1; index < lines.length; index += 1) {
@@ -31021,23 +31025,39 @@ function parseUnifiedDiffPatch(patch) {
         continue;
       }
       if (rawLine.startsWith(" ")) {
+        const content = rawLine.slice(1);
+        hunk.contextLines.push(currentLine);
+        hunk.contextLineContents.push({
+          line: currentLine,
+          content
+        });
         currentLine += 1;
       }
     }
     hunks.push(hunk);
   }
   const changedLineContentByLine = /* @__PURE__ */ new Map();
+  const allVisibleLineContentByLine = /* @__PURE__ */ new Map();
   for (const hunk of hunks) {
     for (const entry of hunk.changedLineContents) {
       changedLineContentByLine.set(entry.line, entry.content);
+      allVisibleLineContentByLine.set(entry.line, entry.content);
+    }
+    for (const entry of hunk.contextLineContents) {
+      allVisibleLineContentByLine.set(entry.line, entry.content);
     }
   }
+  const allVisibleLines = Array.from(allVisibleLineContentByLine.keys()).sort(
+    (left, right) => left - right
+  );
   return {
     hunks,
     changedLines: Array.from(changedLineContentByLine.keys()).sort(
       (left, right) => left - right
     ),
-    changedLineContentByLine
+    changedLineContentByLine,
+    allVisibleLines,
+    allVisibleLineContentByLine
   };
 }
 function resolveChangedLine(params) {
@@ -31047,19 +31067,16 @@ function resolveChangedLine(params) {
     searchText,
     allowFallbackToFirstChangedLine = true
   } = params;
-  if (patchMap.changedLines.length === 0) {
+  if (patchMap.allVisibleLines.length === 0) {
     return void 0;
   }
-  const changedLineSet = new Set(patchMap.changedLines);
+  const allVisibleLineSet = new Set(patchMap.allVisibleLines);
   let roundedRequestedLine;
   let closestRequestedLine;
   let closestRequestedDistance = Number.POSITIVE_INFINITY;
   if (typeof requestedLine === "number" && Number.isFinite(requestedLine)) {
     roundedRequestedLine = Math.round(requestedLine);
-    if (changedLineSet.has(roundedRequestedLine)) {
-      return roundedRequestedLine;
-    }
-    const closest = closestLine(roundedRequestedLine, patchMap.changedLines);
+    const closest = closestLine(roundedRequestedLine, patchMap.allVisibleLines);
     if (typeof closest === "number") {
       closestRequestedLine = closest;
       closestRequestedDistance = Math.abs(closest - roundedRequestedLine);
@@ -31076,7 +31093,7 @@ function resolveChangedLine(params) {
       for (const [
         line,
         content
-      ] of patchMap.changedLineContentByLine.entries()) {
+      ] of patchMap.allVisibleLineContentByLine.entries()) {
         const normalizedLine = normalizeSearchText(content);
         if (normalizedLine.includes(candidate) || candidate.length >= 12 && candidate.includes(normalizedLine)) {
           exactMatchLines.add(line);
@@ -31105,13 +31122,16 @@ function resolveChangedLine(params) {
       return bestLine;
     }
   }
+  if (typeof roundedRequestedLine === "number" && allVisibleLineSet.has(roundedRequestedLine)) {
+    return roundedRequestedLine;
+  }
   if (closestRequestedLine && closestRequestedDistance <= 2) {
     return closestRequestedLine;
   }
   if (!allowFallbackToFirstChangedLine) {
     return void 0;
   }
-  return closestRequestedLine ?? patchMap.changedLines[0];
+  return closestRequestedLine ?? patchMap.changedLines[0] ?? patchMap.allVisibleLines[0];
 }
 
 // src/core/inline-comments.ts
@@ -31134,8 +31154,16 @@ function normalizePath2(pathValue) {
 }
 function formatInlineCommentBody(finding) {
   const recommendation = finding.recommendation ?? finding.suggestion;
-  const lines = [finding.title, finding.detail, recommendation ?? ""].map((value) => value.trim()).filter((value) => value.length > 0);
-  return lines.join("\n");
+  const parts = [
+    `**${finding.title.trim()}**
+`,
+    finding.detail.trim()
+  ];
+  const rec = (recommendation ?? "").trim();
+  if (rec.length > 0) {
+    parts.push(rec);
+  }
+  return parts.join("\n");
 }
 function sortBySeverity(findings) {
   return [...findings].sort((left, right) => {
@@ -31193,27 +31221,11 @@ function resolveInlineCommentCandidate(params) {
   if (typeof resolvedLine !== "number") {
     return { reason: "unresolved-line" };
   }
-  let resolvedStartLine = resolvedLine;
-  let resolvedEndLine = resolvedLine;
-  if (typeof finding.endLine === "number" && Number.isFinite(finding.endLine)) {
-    const resolvedRangeLine = resolveChangedLine({
-      patchMap,
-      requestedLine: finding.endLine,
-      searchText: finding.detail,
-      allowFallbackToFirstChangedLine
-    });
-    if (typeof resolvedRangeLine === "number") {
-      resolvedStartLine = Math.min(resolvedLine, resolvedRangeLine);
-      resolvedEndLine = Math.max(resolvedLine, resolvedRangeLine);
-    }
-  }
-  const startLine = resolvedStartLine < resolvedEndLine ? resolvedStartLine : void 0;
-  const dedupeKey = `${fileRecord.path}:${startLine ?? resolvedEndLine}:${resolvedEndLine}:${finding.title.trim().toLowerCase()}`;
+  const dedupeKey = `${fileRecord.path}:${resolvedLine}:${finding.title.trim().toLowerCase()}`;
   return {
     candidate: {
       path: fileRecord.path,
-      line: resolvedEndLine,
-      startLine,
+      line: resolvedLine,
       body: formatInlineCommentBody(finding),
       severity: finding.severity,
       title: finding.title,

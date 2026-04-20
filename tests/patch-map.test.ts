@@ -14,16 +14,28 @@ const SAMPLE_PATCH = [
 ].join("\n");
 
 describe("resolveChangedLine", () => {
-  it("resolves small off-by-one drift to the nearest changed line", () => {
+  it("resolves small off-by-one drift to the nearest visible line", () => {
     const patchMap = parseUnifiedDiffPatch(SAMPLE_PATCH);
 
     const resolved = resolveChangedLine({
       patchMap,
-      requestedLine: 4,
+      requestedLine: 6, // 5 and 6 don't exist. Closest is 4.
       allowFallbackToFirstChangedLine: false,
     });
 
-    expect(resolved).toBe(3);
+    expect(resolved).toBe(4);
+  });
+
+  it("accepts explicitly requested context lines", () => {
+    const patchMap = parseUnifiedDiffPatch(SAMPLE_PATCH);
+
+    const resolved = resolveChangedLine({
+      patchMap,
+      requestedLine: 1, // Line 1 is a context line in SAMPLE_PATCH
+      allowFallbackToFirstChangedLine: false,
+    });
+
+    expect(resolved).toBe(1);
   });
 
   it("returns undefined for distant line drift when fallback is disabled", () => {

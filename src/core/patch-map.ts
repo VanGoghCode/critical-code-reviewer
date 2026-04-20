@@ -10,12 +10,19 @@ export interface ParsedPatchHunk {
     line: number;
     content: string;
   }>;
+  contextLines: number[];
+  contextLineContents: Array<{
+    line: number;
+    content: string;
+  }>;
 }
 
 export interface ParsedPatchMap {
   hunks: ParsedPatchHunk[];
   changedLines: number[];
   changedLineContentByLine: Map<number, string>;
+  allVisibleLines: number[];
+  allVisibleLineContentByLine: Map<number, string>;
 }
 
 function toPositiveInt(raw: string | undefined, fallback: number): number {
@@ -120,6 +127,8 @@ export function parseUnifiedDiffPatch(patch: string): ParsedPatchMap {
       hunks: [],
       changedLines: [],
       changedLineContentByLine: new Map<number, string>(),
+      allVisibleLines: [],
+      allVisibleLineContentByLine: new Map<number, string>(),
     };
   }
 
@@ -140,6 +149,8 @@ export function parseUnifiedDiffPatch(patch: string): ParsedPatchMap {
       newCount: toPositiveInt(match[4], 1),
       changedLines: [],
       changedLineContents: [],
+      contextLines: [],
+      contextLineContents: [],
     };
 
     let currentLine = hunk.newStart;
@@ -167,6 +178,12 @@ export function parseUnifiedDiffPatch(patch: string): ParsedPatchMap {
       }
 
       if (rawLine.startsWith(" ")) {
+        const content = rawLine.slice(1);
+        hunk.contextLines.push(currentLine);
+        hunk.contextLineContents.push({
+          line: currentLine,
+          content,
+        });
         currentLine += 1;
       }
     }
@@ -175,11 +192,20 @@ export function parseUnifiedDiffPatch(patch: string): ParsedPatchMap {
   }
 
   const changedLineContentByLine = new Map<number, string>();
+  const allVisibleLineContentByLine = new Map<number, string>();
   for (const hunk of hunks) {
     for (const entry of hunk.changedLineContents) {
       changedLineContentByLine.set(entry.line, entry.content);
+      allVisibleLineContentByLine.set(entry.line, entry.content);
+    }
+    for (const entry of hunk.contextLineContents) {
+      allVisibleLineContentByLine.set(entry.line, entry.content);
     }
   }
+
+  const allVisibleLines = Array.from(allVisibleLineContentByLine.keys()).sort(
+    (left, right) => left - right,
+  );
 
   return {
     hunks,
@@ -187,6 +213,8 @@ export function parseUnifiedDiffPatch(patch: string): ParsedPatchMap {
       (left, right) => left - right,
     ),
     changedLineContentByLine,
+    allVisibleLines,
+    allVisibleLineContentByLine,
   };
 }
 
@@ -203,22 +231,18 @@ export function resolveChangedLine(params: {
     allowFallbackToFirstChangedLine = true,
   } = params;
 
-  if (patchMap.changedLines.length === 0) {
+  if (patchMap.allVisibleLines.length === 0) {
     return undefined;
   }
 
-  const changedLineSet = new Set<number>(patchMap.changedLines);
+  const allVisibleLineSet = new Set<number>(patchMap.allVisibleLines);
   let roundedRequestedLine: number | undefined;
   let closestRequestedLine: number | undefined;
   let closestRequestedDistance = Number.POSITIVE_INFINITY;
 
   if (typeof requestedLine === "number" && Number.isFinite(requestedLine)) {
     roundedRequestedLine = Math.round(requestedLine);
-    if (changedLineSet.has(roundedRequestedLine)) {
-      return roundedRequestedLine;
-    }
-
-    const closest = closestLine(roundedRequestedLine, patchMap.changedLines);
+    const closest = closestLine(roundedRequestedLine, patchMap.allVisibleLines);
     if (typeof closest === "number") {
       closestRequestedLine = closest;
       closestRequestedDistance = Math.abs(closest - roundedRequestedLine);
@@ -237,7 +261,7 @@ export function resolveChangedLine(params: {
       for (const [
         line,
         content,
-      ] of patchMap.changedLineContentByLine.entries()) {
+      ] of patchMap.allVisibleLineContentByLine.entries()) {
         const normalizedLine = normalizeSearchText(content);
         if (
           normalizedLine.includes(candidate) ||
@@ -287,6 +311,13 @@ export function resolveChangedLine(params: {
     }
   }
 
+  if (
+    typeof roundedRequestedLine === "number" &&
+    allVisibleLineSet.has(roundedRequestedLine)
+  ) {
+    return roundedRequestedLine;
+  }
+
   // Allow minor off-by-one/two drift from the model, but avoid long-distance remaps.
   if (closestRequestedLine && closestRequestedDistance <= 2) {
     return closestRequestedLine;
@@ -296,5 +327,9 @@ export function resolveChangedLine(params: {
     return undefined;
   }
 
-  return closestRequestedLine ?? patchMap.changedLines[0];
+  return (
+    closestRequestedLine ??
+    patchMap.changedLines[0] ??
+    patchMap.allVisibleLines[0]
+  );
 }

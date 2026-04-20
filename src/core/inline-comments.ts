@@ -79,11 +79,18 @@ function formatInlineCommentBody(finding: ReviewFinding): string {
   // Keep inline comments in a predictable structure:
   // 1) criterion name, 2) issue + impact detail, 3) small suggestion.
   const recommendation = finding.recommendation ?? finding.suggestion;
-  const lines = [finding.title, finding.detail, recommendation ?? ""]
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+  
+  const parts = [
+    `**${finding.title.trim()}**\n`,
+    finding.detail.trim(),
+  ];
 
-  return lines.join("\n");
+  const rec = (recommendation ?? "").trim();
+  if (rec.length > 0) {
+    parts.push(rec);
+  }
+
+  return parts.join("\n");
 }
 
 function sortBySeverity(findings: ReviewFinding[]): ReviewFinding[] {
@@ -171,34 +178,14 @@ function resolveInlineCommentCandidate(params: {
     return { reason: "unresolved-line" };
   }
 
-  let resolvedStartLine = resolvedLine;
-  let resolvedEndLine = resolvedLine;
-
-  if (typeof finding.endLine === "number" && Number.isFinite(finding.endLine)) {
-    const resolvedRangeLine = resolveChangedLine({
-      patchMap,
-      requestedLine: finding.endLine,
-      searchText: finding.detail,
-      allowFallbackToFirstChangedLine,
-    });
-
-    if (typeof resolvedRangeLine === "number") {
-      resolvedStartLine = Math.min(resolvedLine, resolvedRangeLine);
-      resolvedEndLine = Math.max(resolvedLine, resolvedRangeLine);
-    }
-  }
-
-  const startLine =
-    resolvedStartLine < resolvedEndLine ? resolvedStartLine : undefined;
-
-  const dedupeKey = `${fileRecord.path}:${startLine ?? resolvedEndLine}:${resolvedEndLine}:${finding.title
+  const dedupeKey = `${fileRecord.path}:${resolvedLine}:${finding.title
     .trim()
     .toLowerCase()}`;
+
   return {
     candidate: {
       path: fileRecord.path,
-      line: resolvedEndLine,
-      startLine,
+      line: resolvedLine,
       body: formatInlineCommentBody(finding),
       severity: finding.severity,
       title: finding.title,

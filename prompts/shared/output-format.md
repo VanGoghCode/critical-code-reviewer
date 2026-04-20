@@ -20,7 +20,6 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
       "detail": "30-55 words, conversational, 2-3 complete sentences. Explain the concrete issue, then explain why it matters, who it impacts, and how. Name specific people (for example: a student, a teacher, a parent, a Black student), never generic 'user(s)'.",
       "file": "exact file path from the diff (required)",
       "line": 42,
-      "endLine": 45,
       "recommendation": "Small logic suggestion in one plain sentence (8-25 words), no label prefix"
     }
   ],
@@ -40,7 +39,6 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
   - Never use generic `user` or `users` in summary, detail, recommendation, todos, or notes.
   - `file`: Exact path from the diff input (required — never omit).
   - `line`: Integer line number in the new file, pointing to an added or changed line (required — never omit).
-  - `endLine`: Optional — use when a finding spans a block of lines.
   - `severity`: "low" | "medium" | "high". This goes in the severity field only — never include it as a prefix in the text.
   - `recommendation`: One small logic suggestion in plain language, no label prefix.
 - `todos`: Action items for the PR author.
