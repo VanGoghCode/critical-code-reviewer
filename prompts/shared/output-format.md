@@ -20,7 +20,7 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
       "detail": "30-55 words, conversational, 2-3 complete sentences. Explain the concrete issue, then explain why it matters, who it impacts, and how. Name specific people (for example: a student, a teacher, a parent, a Black student), never generic 'user(s)'.",
       "file": "exact file path from the diff (required)",
       "line": 42,
-      "recommendation": "Small logic suggestion in one plain but polite sentence (15-25 words), no label prefix, followed by a CCR reference link on a new line: 📎 [CRIT-X.Y](ccr-framework.md#crit-x-y)"
+      "recommendation": "Small logic suggestion in one plain but polite sentence (15-25 words), no label prefix, followed by a CCR reference link on a new line: 📎 [CRIT-X.Y](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-x-y)"
     }
   ],
   "todos": ["Follow-up action items for the PR author"],
@@ -40,7 +40,7 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
   - `file`: Exact path from the diff input (required — never omit).
   - `line`: Integer line number in the new file, pointing to an added or changed line (required — never omit).
   - `severity`: "low" | "medium" | "high". This goes in the severity field only — never include it as a prefix in the text.
-  - `recommendation`: One small logic suggestion in plain but polite language, no label prefix, followed by a CCR reference link on a new line in the format: `📎 [CRIT-X.Y · Criterion Name](ccr-framework.md#crit-x-y)` where X.Y matches the criterion ID from the framework.
+  - `recommendation`: One small logic suggestion in plain but polite language, no label prefix, followed by a CCR reference link on a new line in the format: `📎 [CRIT-X.Y · Criterion Name](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-x-y)` where X.Y matches the criterion ID from the framework.
 - `todos`: Action items for the PR author.
 - `notes`: 1-3 reflective, assumption-checking questions (or edge cases), preferably phrased as teammate prompts.
 
@@ -76,40 +76,40 @@ When adding a `recommendation` field to a finding, always append a CCR reference
 
 **Valid CCR Criteria:**
 
-- [CRIT-1.1 · Unrepresentative Dataset Coverage](ccr-framework.md#crit-1-1)
-- [CRIT-1.2 · Undefined Fairness Evaluation Attributes](ccr-framework.md#crit-1-2)
-- [CRIT-1.3 · Missing Group-Wise Fairness Targets](ccr-framework.md#crit-1-3)
-- [CRIT-2.1 · Unvalidated Early-Warning Thresholds](ccr-framework.md#crit-2-1)
-- [CRIT-2.2 · Persistent Negative State](ccr-framework.md#crit-2-2)
-- [CRIT-2.3 · Hidden Learning Path Requirements](ccr-framework.md#crit-2-3)
-- [CRIT-2.4 · Pedagogically Unconstrained Adaptation](ccr-framework.md#crit-2-4)
-- [CRIT-3.1 · Protected and Proxy-Based Differential Treatment](ccr-framework.md#crit-3-1)
-- [CRIT-3.2 · Unvalidated Fairness Mitigations](ccr-framework.md#crit-3-2)
-- [CRIT-3.3 · Unenforced Protected-Attribute Separation](ccr-framework.md#crit-3-3)
-- [CRIT-4.1 · Culturally Narrow Representations and Validation](ccr-framework.md#crit-4-1)
-- [CRIT-4.2 · Exclusionary Language in Code and UI](ccr-framework.md#crit-4-2)
-- [CRIT-4.3 · Excluding Access Assumptions](ccr-framework.md#crit-4-3)
-- [CRIT-5.1 · Opaque AI Decision Outputs](ccr-framework.md#crit-5-1)
-- [CRIT-5.2 · Causal Overclaiming in Analytics](ccr-framework.md#crit-5-2)
-- [CRIT-5.3 · Mismatched Prediction Validation and Use](ccr-framework.md#crit-5-3)
-- [CRIT-5.4 · Unidirectional Algorithmic Decisions Without Educator Contestability](ccr-framework.md#crit-5-4)
-- [CRIT-5.5 · Automation Without Review Safeguards](ccr-framework.md#crit-5-5)
-- [CRIT-6.1 · Missing Consent Checks for Learner Data](ccr-framework.md#crit-6-1)
-- [CRIT-7.1 · Unenforced High-Risk AI Release Gates](ccr-framework.md#crit-7-1)
-- [CRIT-7.2 · Missing Post-Deployment Risk Monitoring](ccr-framework.md#crit-7-2)
-- [CRIT-7.3 · Missing Fairness Review for Student-Affecting Changes](ccr-framework.md#crit-7-3)
-- [CRIT-7.4 · Missing Bias Review for AI-Assisted Code](ccr-framework.md#crit-7-4)
-- [CRIT-7.5 · Missing Bias Regression Checks for AI-Generated Code](ccr-framework.md#crit-7-5)
-- [CRIT-7.6 · Missing User-Need Traceability](ccr-framework.md#crit-7-6)
-- [CRIT-7.7 · Untracked Fairness Mitigation Outcomes](ccr-framework.md#crit-7-7)
+- [CRIT-1.1 · Unrepresentative Dataset Coverage](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-1-1)
+- [CRIT-1.2 · Undefined Fairness Evaluation Attributes](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-1-2)
+- [CRIT-1.3 · Missing Group-Wise Fairness Targets](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-1-3)
+- [CRIT-2.1 · Unvalidated Early-Warning Thresholds](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-2-1)
+- [CRIT-2.2 · Persistent Negative State](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-2-2)
+- [CRIT-2.3 · Hidden Learning Path Requirements](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-2-3)
+- [CRIT-2.4 · Pedagogically Unconstrained Adaptation](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-2-4)
+- [CRIT-3.1 · Protected and Proxy-Based Differential Treatment](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-3-1)
+- [CRIT-3.2 · Unvalidated Fairness Mitigations](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-3-2)
+- [CRIT-3.3 · Unenforced Protected-Attribute Separation](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-3-3)
+- [CRIT-4.1 · Culturally Narrow Representations and Validation](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-4-1)
+- [CRIT-4.2 · Exclusionary Language in Code and UI](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-4-2)
+- [CRIT-4.3 · Excluding Access Assumptions](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-4-3)
+- [CRIT-5.1 · Opaque AI Decision Outputs](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-5-1)
+- [CRIT-5.2 · Causal Overclaiming in Analytics](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-5-2)
+- [CRIT-5.3 · Mismatched Prediction Validation and Use](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-5-3)
+- [CRIT-5.4 · Unidirectional Algorithmic Decisions Without Educator Contestability](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-5-4)
+- [CRIT-5.5 · Automation Without Review Safeguards](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-5-5)
+- [CRIT-6.1 · Missing Consent Checks for Learner Data](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-6-1)
+- [CRIT-7.1 · Unenforced High-Risk AI Release Gates](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-7-1)
+- [CRIT-7.2 · Missing Post-Deployment Risk Monitoring](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-7-2)
+- [CRIT-7.3 · Missing Fairness Review for Student-Affecting Changes](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-7-3)
+- [CRIT-7.4 · Missing Bias Review for AI-Assisted Code](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-7-4)
+- [CRIT-7.5 · Missing Bias Regression Checks for AI-Generated Code](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-7-5)
+- [CRIT-7.6 · Missing User-Need Traceability](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-7-6)
+- [CRIT-7.7 · Untracked Fairness Mitigation Outcomes](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-7-7)
 
-**Format:** End each recommendation with a new line containing: `📎 [CRIT-X.Y · Criterion Name](ccr-framework.md#crit-x-y)`
+**Format:** End each recommendation with a new line containing: `📎 [CRIT-X.Y · Criterion Name](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-x-y)`
 
 **Example:** 
 ```
-"recommendation": "Authorize by token subject plus active consent state before returning learner alerts.\n📎 [CRIT-6.1 · Missing Consent Checks for Learner Data](ccr-framework.md#crit-6-1)"
+"recommendation": "Authorize by token subject plus active consent state before returning learner alerts.\n📎 [CRIT-6.1 · Missing Consent Checks for Learner Data](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-6-1)"
 ```
 
 ### Example
 
-{"summary":"The alert payloads and enums are organized cleanly, which will help a teacher interpret status categories consistently across screens. The highest-priority risk is path-based identity lookup on alert reads, because a student could potentially access another student's alert history if server checks trust route parameters over token subject claims. Have you thought about how an appeal workflow would handle a wrongly flagged student whose intervention history was exposed to the wrong teacher?","riskLevel":"medium","findings":[{"severity":"high","title":"Missing Consent Checks for Learner Data","detail":"The alerts request path is built from studentId, so if server authorization trusts that path over token subject claims, a student might retrieve another student's alert timeline. That can mislead a teacher's intervention decisions and expose sensitive records to the wrong parent.","file":"src/app/alerts/page.tsx","line":103,"recommendation":"Authorize by token subject plus active consent state before returning learner alerts.\n📎 [CRIT-6.1 · Missing Consent Checks for Learner Data](ccr-framework.md#crit-6-1)"}],"todos":[],"notes":["When implementing this endpoint, have you thought about how a counselor can contest or correct a false alert tied to the wrong student?"]}
+{"summary":"The alert payloads and enums are organized cleanly, which will help a teacher interpret status categories consistently across screens. The highest-priority risk is path-based identity lookup on alert reads, because a student could potentially access another student's alert history if server checks trust route parameters over token subject claims. Have you thought about how an appeal workflow would handle a wrongly flagged student whose intervention history was exposed to the wrong teacher?","riskLevel":"medium","findings":[{"severity":"high","title":"Missing Consent Checks for Learner Data","detail":"The alerts request path is built from studentId, so if server authorization trusts that path over token subject claims, a student might retrieve another student's alert timeline. That can mislead a teacher's intervention decisions and expose sensitive records to the wrong parent.","file":"src/app/alerts/page.tsx","line":103,"recommendation":"Authorize by token subject plus active consent state before returning learner alerts.\n📎 [CRIT-6.1 · Missing Consent Checks for Learner Data](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-6-1)"}],"todos":[],"notes":["When implementing this endpoint, have you thought about how a counselor can contest or correct a false alert tied to the wrong student?"]}
