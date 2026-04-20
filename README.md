@@ -8,9 +8,20 @@ Runs on Node 24 via the ASU AIML provider.
 
 1. Add the workflow below to `.github/workflows/ccr-review.yml`
 2. Add a repository secret `ASU_API_KEY` with your ASU AIML API key
-3. Open a PR
+3. Place `ccr-framework.md` in your repository root (for reference links to work)
+4. Open a PR
 
 Pin to a release tag (`@v1`) or commit SHA instead of `@main` for stability.
+
+## CCR Framework References
+
+Each review finding automatically includes a reference link to the CCR framework documentation:
+
+```
+📎 [CRIT-X.Y · Criterion Name](ccr-framework.md#crit-x-y)
+```
+
+These links allow developers to quickly navigate to the full criterion definition, including detailed descriptions, indicators, and examples. See [CCR-REFERENCES.md](CCR-REFERENCES.md) for more details.
 
 ## Architectures
 
