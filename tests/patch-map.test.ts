@@ -170,7 +170,7 @@ describe("resolveAnchorToGitHubLocation", () => {
     expect(result).toBeUndefined();
   });
 
-  it("prefers line hint when multiple exact matches exist", () => {
+  it("returns first match when multiple exact matches exist", () => {
     const multiLinePatch = [
       "@@ -1,2 +1,4 @@",
       " const seed = 1;",
@@ -181,13 +181,13 @@ describe("resolveAnchorToGitHubLocation", () => {
     
     const hunks = parseStructuredDiffHunks(multiLinePatch);
     
-    // Both lines contain "compute", but line 3 is closer to hint
+    // Both lines contain "compute", returns first match
     const result = resolveAnchorToGitHubLocation({
       anchorSnippet: "compute",
       hunks,
-      lineHint: 3,
     });
 
     expect(result?.line).toBe(2);
+    expect(result?.confidence).toBe("exact");
   });
 });

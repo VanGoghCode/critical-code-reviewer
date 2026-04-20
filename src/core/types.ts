@@ -88,7 +88,6 @@ export interface ReviewFinding {
   suggestion?: string;
   anchorSnippet?: string;
   hunkId?: string;
-  line?: number;
 }
 
 export interface ReviewModelOutput {

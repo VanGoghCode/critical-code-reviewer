@@ -28,7 +28,6 @@ export type InlineCommentSkipReason = (typeof SKIP_REASON_KEYS)[number];
 export interface InlineReviewComment {
   path: string;
   line: number;
-  startLine?: number;
   body: string;
   severity: ReviewSeverity;
   title: string;
@@ -53,7 +52,6 @@ export type InlineCommentStrategy = "findings" | "file-coverage";
 interface InlineCommentCandidate {
   path: string;
   line: number;
-  startLine?: number;
   body: string;
   severity: ReviewSeverity;
   title: string;
@@ -79,15 +77,23 @@ function normalizePath(pathValue: string): string {
   return pathValue.replaceAll("\\", "/").trim().toLowerCase();
 }
 
-function formatInlineCommentBody(finding: ReviewFinding): string {
+function formatInlineCommentBody(
+  finding: ReviewFinding,
+  line?: number,
+): string {
   // Keep inline comments in a predictable structure:
-  // 1) criterion name, 2) issue + impact detail, 3) small suggestion.
+  // 1) line notation, 2) criterion name, 3) issue + impact detail, 4) small suggestion.
   const recommendation = finding.recommendation ?? finding.suggestion;
 
-  const parts = [
-    `**${finding.title.trim()}**\n`,
-    finding.detail.trim(),
-  ];
+  const parts: string[] = [];
+
+  // Add line notation if we have line information
+  if (typeof line === "number") {
+    parts.push(`_Comment on line ${line}_\n`);
+  }
+
+  parts.push(`**${finding.title.trim()}**\n`);
+  parts.push(finding.detail.trim());
 
   const rec = (recommendation ?? "").trim();
   if (rec.length > 0) {
@@ -179,7 +185,6 @@ function resolveInlineCommentCandidate(params: {
     anchorSnippet,
     hunkId: finding.hunkId,
     hunks,
-    lineHint: finding.line,
     allowFallback: allowFallbackToFirstChangedLine,
   });
 
@@ -198,7 +203,7 @@ function resolveInlineCommentCandidate(params: {
           candidate: {
             path: fileRecord.path,
             line: firstChanged.newLine,
-            body: formatInlineCommentBody(finding),
+            body: formatInlineCommentBody(finding, firstChanged.newLine),
             severity: finding.severity,
             title: finding.title,
             dedupeKey,
@@ -218,7 +223,7 @@ function resolveInlineCommentCandidate(params: {
     candidate: {
       path: fileRecord.path,
       line: anchorResult.line,
-      body: formatInlineCommentBody(finding),
+      body: formatInlineCommentBody(finding, anchorResult.line),
       severity: finding.severity,
       title: finding.title,
       dedupeKey,
@@ -277,7 +282,6 @@ export function buildInlineReviewComments(
     comments.push({
       path: candidate.path,
       line: candidate.line,
-      startLine: candidate.startLine,
       body: candidate.body,
       severity: candidate.severity,
       title: candidate.title,

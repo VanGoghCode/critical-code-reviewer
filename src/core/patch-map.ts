@@ -478,7 +478,6 @@ export function parseStructuredDiffHunks(patch: string): StructuredDiffHunk[] {
 
 export interface AnchorResolutionResult {
   line: number;
-  startLine?: number;
   confidence: "exact" | "fuzzy" | "fallback";
 }
 
@@ -486,10 +485,9 @@ export function resolveAnchorToGitHubLocation(params: {
   anchorSnippet: string;
   hunkId?: string;
   hunks: StructuredDiffHunk[];
-  lineHint?: number;
   allowFallback?: boolean;
 }): AnchorResolutionResult | undefined {
-  const { anchorSnippet, hunkId, hunks, lineHint, allowFallback = false } = params;
+  const { anchorSnippet, hunkId, hunks, allowFallback = false } = params;
 
   if (!anchorSnippet || anchorSnippet.trim().length === 0) {
     return undefined;
@@ -524,27 +522,19 @@ export function resolveAnchorToGitHubLocation(params: {
   }
 
   // Priority 2: Fuzzy match with token overlap in changed lines
-  let bestMatch: { line: number; score: number; distance: number } | undefined;
+  let bestMatch: { line: number; score: number } | undefined;
 
   for (const hunk of targetHunks) {
     const changedLines = hunk.lines.filter((l) => l.type === "add");
     
     for (const line of changedLines) {
       const overlap = tokenOverlapScore(normalizedAnchor, line.text);
-      const distance = lineHint && line.newLine
-        ? Math.abs(line.newLine - lineHint)
-        : Number.POSITIVE_INFINITY;
 
       if (overlap.overlaps >= 3 && overlap.score >= 0.35) {
-        if (
-          !bestMatch ||
-          overlap.overlaps > bestMatch.score ||
-          (overlap.overlaps === bestMatch.score && distance < bestMatch.distance)
-        ) {
+        if (!bestMatch || overlap.overlaps > bestMatch.score) {
           bestMatch = {
             line: line.newLine!,
             score: overlap.overlaps,
-            distance,
           };
         }
       }

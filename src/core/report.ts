@@ -115,9 +115,7 @@ function formatFindings(findings: ReviewFinding[]): string {
 
   return findings
     .map((finding) => {
-      const lineLocation =
-        typeof finding.line === "number" ? `:${finding.line}` : "";
-      const location = finding.file ? ` (${finding.file}${lineLocation})` : "";
+      const location = finding.file ? ` (${finding.file})` : "";
       const recommendation = finding.recommendation ?? finding.suggestion;
       const recommendationLine = recommendation
         ? `\n  Recommendation: ${recommendation}`

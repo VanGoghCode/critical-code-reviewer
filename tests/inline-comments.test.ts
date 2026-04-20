@@ -110,4 +110,39 @@ describe("buildInlineReviewComments", () => {
     expect(result.comments).toHaveLength(1);
     expect(result.comments[0].line).toBe(2);
   });
+
+  it("includes line notation in comment body", () => {
+    const result = buildInlineReviewComments({
+      findings: [
+        {
+          severity: "high",
+          title: "Protected Attribute Governance",
+          detail: "The teacherVisible flag lacks confidence calibration checks.",
+          file: "src/app/alerts.ts",
+          anchorSnippet: "teacherVisible",
+          recommendation: "Gate visibility until confidence and consent checks both pass.",
+        },
+      ],
+      files: [
+        {
+          path: "src/app/alerts.ts",
+          name: "alerts.ts",
+          content: "",
+          patch: [
+            "@@ -1,3 +1,4 @@",
+            " const seed = 1;",
+            "-const score = compute(raw);",
+            "+const normalizedScore = compute(raw);",
+            "+const teacherVisible = normalizedScore > 0.8;",
+            " export { normalizedScore };",
+          ].join("\n"),
+        },
+      ],
+      maxComments: 10,
+    });
+
+    expect(result.comments).toHaveLength(1);
+    expect(result.comments[0].body).toContain("Comment on line 3");
+    expect(result.comments[0].body).toContain("**Protected Attribute Governance**");
+  });
 });
