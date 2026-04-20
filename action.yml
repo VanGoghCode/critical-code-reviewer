@@ -1,4 +1,5 @@
-name: CCR Review
+name: critical-code-reviewer
+pfp: CCR-pig.png
 description: Review PR changes with configurable prompt architectures and post inline review comments.
 author: GitHub Copilot
 inputs:
