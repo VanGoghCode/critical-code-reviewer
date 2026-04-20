@@ -19,7 +19,7 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
       "title": "Associated criterion name only (for example: Fairness, Missing Consent Checks for Learner Data, Opaque AI Decision Outputs)",
       "detail": "30-55 words, conversational, 2-3 complete sentences. **Start with the exact code element being flagged** (e.g., 'The `risk_score` field...' or 'The `validateUser()` function...'). Explain the concrete issue, then explain why it matters, who it impacts, and how. Name specific people (for example: a student, a teacher, a parent, a Black student), never generic 'user(s)'.",
       "file": "exact file path from the diff (required)",
-      "line": 42,
+      "anchorSnippet": "A short, distinctive code snippet that identifies the problematic code (e.g., 'risk_score', 'validateUser()', 'studentId'). Choose something unique that appears in the changed code.",
       "recommendation": "Small logic suggestion in one plain but polite sentence (15-25 words), no label prefix, followed by a CCR reference link on a new line: 📎 [CRIT-X.Y](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-x-y)"
     }
   ],
@@ -35,10 +35,8 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
 - `findings`: One entry per issue found. Each finding **MUST** include:
   - `title`: The associated framework criterion name (or closest criterion family). Do not use generic issue labels.
   - `detail`: 30-55 words, complete sentences. **CRITICAL: Start with the exact code snippet, variable name, function name, or field name from the diff** (e.g., "The `risk_score` field in the Alert interface..." or "The `getAlerts()` function call..."). Then explain the concrete issue, why it matters, who is affected, and how. Use specific stakeholder language: `a student`, `a teacher`, `a parent`, `a counselor`, `a Black student`, `an English-learner student`, etc. Never use generic `user` or `users`.
-  - Use specific stakeholder language: `a student`, `a teacher`, `a parent`, `a counselor`, `a Black student`, `an English-learner student`, etc.
-  - Never use generic `user` or `users` in summary, detail, recommendation, todos, or notes.
   - `file`: Exact path from the diff input (required — never omit).
-  - `line`: Integer line number in the new file, pointing to an added or changed line (required — never omit). **This must be the exact line where the problematic code appears, not an approximate location.**
+  - `anchorSnippet`: A short, distinctive code snippet that identifies the problematic code (required). Choose a unique piece of code from the changed lines, such as a variable name, function call, or expression. Examples: `"risk_score"`, `"validateUser()"`, `"studentId"`, `"setLoading(false)"`. This helps pinpoint exactly which code you're referring to.
   - `severity`: "low" | "medium" | "high". This goes in the severity field only — never include it as a prefix in the text.
   - `recommendation`: One small logic suggestion in plain but polite language, no label prefix, followed by a CCR reference link on a new line in the format: `📎 [CRIT-X.Y · Criterion Name](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-x-y)` where X.Y matches the criterion ID from the framework.
 - `todos`: Action items for the PR author.
@@ -65,15 +63,14 @@ Runtime posts one broader main review comment that combines:
 ### Validation Rules
 
 - If no issues found, return findings as an empty array [].
-- Each finding must map to a real changed line in the diff.
-- Do not fabricate line numbers or file paths.
-- **CRITICAL LINE NUMBER ACCURACY:**
-  - Look at the `patch` field in each file - it shows the exact changed lines with `+` prefix
-  - The `line` number must point to a line that was added or modified (has a `+` in the patch)
-  - The code element you mention in `detail` (e.g., `risk_score`) must actually appear on or near that line number in the patch
-  - If you mention multiple code elements, choose the line number of the most important one
-  - When in doubt, reference the line number from the patch diff, not the full file content
-- **Include the actual code element (variable name, function name, field name) at the start of the `detail` field to ensure accurate line mapping.**
+- Each finding must reference real code from the changed files.
+- Do not fabricate file paths or code snippets.
+- **ANCHOR SNIPPET GUIDELINES:**
+  - Choose a distinctive piece of code that clearly identifies what you're flagging
+  - Good examples: variable names (`studentId`), function calls (`validateUser()`), unique expressions (`normalizedScore > 0.8`)
+  - Bad examples: generic keywords (`if`, `return`, `const`), common operators (`=`, `+`)
+  - If you mention multiple code elements in `detail`, choose the most important one for `anchorSnippet`
+  - The snippet should be something a developer can easily find in the changed code
 - Use reviewContext.commitMessages to understand intent and flag mismatches.
 - If previousOutputsParsed is present, use it as the authoritative previous-stage context.
 
@@ -119,4 +116,4 @@ When adding a `recommendation` field to a finding, always append a CCR reference
 
 ### Example
 
-{"summary":"The alert payloads and enums are organized cleanly, which will help a teacher interpret status categories consistently across screens. The highest-priority risk is path-based identity lookup on alert reads, because a student could potentially access another student's alert history if server checks trust route parameters over token subject claims. Have you thought about how an appeal workflow would handle a wrongly flagged student whose intervention history was exposed to the wrong teacher?","riskLevel":"medium","findings":[{"severity":"high","title":"Missing Consent Checks for Learner Data","detail":"The alerts request path is built from studentId, so if server authorization trusts that path over token subject claims, a student might retrieve another student's alert timeline. That can mislead a teacher's intervention decisions and expose sensitive records to the wrong parent.","file":"src/app/alerts/page.tsx","line":103,"recommendation":"Authorize by token subject plus active consent state before returning learner alerts.\n📎 [CRIT-6.1 · Missing Consent Checks for Learner Data](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-6-1)"}],"todos":[],"notes":["When implementing this endpoint, have you thought about how a counselor can contest or correct a false alert tied to the wrong student?"]}
+{"summary":"The alert payloads and enums are organized cleanly, which will help a teacher interpret status categories consistently across screens. The highest-priority risk is path-based identity lookup on alert reads, because a student could potentially access another student's alert history if server checks trust route parameters over token subject claims. Have you thought about how an appeal workflow would handle a wrongly flagged student whose intervention history was exposed to the wrong teacher?","riskLevel":"medium","findings":[{"severity":"high","title":"Missing Consent Checks for Learner Data","detail":"The alerts request path is built from studentId, so if server authorization trusts that path over token subject claims, a student might retrieve another student's alert timeline. That can mislead a teacher's intervention decisions and expose sensitive records to the wrong parent.","file":"src/app/alerts/page.tsx","anchorSnippet":"studentId","recommendation":"Authorize by token subject plus active consent state before returning learner alerts.\n📎 [CRIT-6.1 · Missing Consent Checks for Learner Data](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-6-1)"}],"todos":[],"notes":["When implementing this endpoint, have you thought about how a counselor can contest or correct a false alert tied to the wrong student?"]}

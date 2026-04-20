@@ -16,6 +16,24 @@ export interface ReviewFileInput {
   language?: string;
   patch?: string;
   previousPath?: string;
+  hunks?: DiffHunk[];
+}
+
+export interface DiffHunk {
+  id: string;
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+  header: string;
+  lines: DiffLine[];
+}
+
+export interface DiffLine {
+  type: "context" | "add" | "del";
+  oldLine: number | null;
+  newLine: number | null;
+  text: string;
 }
 
 export interface ReviewContext {
@@ -66,10 +84,11 @@ export interface ReviewFinding {
   title: string;
   detail: string;
   file?: string;
-  line?: number;
-  endLine?: number;
   recommendation?: string;
   suggestion?: string;
+  anchorSnippet?: string;
+  hunkId?: string;
+  line?: number;
 }
 
 export interface ReviewModelOutput {

@@ -1,5 +1,22 @@
 const HUNK_HEADER_PATTERN = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
+export interface DiffLine {
+  type: "context" | "add" | "del";
+  oldLine: number | null;
+  newLine: number | null;
+  text: string;
+}
+
+export interface StructuredDiffHunk {
+  id: string;
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+  header: string;
+  lines: DiffLine[];
+}
+
 export interface ParsedPatchHunk {
   oldStart: number;
   oldCount: number;
@@ -376,4 +393,183 @@ export function resolveChangedLine(params: {
     patchMap.changedLines[0] ??
     patchMap.allVisibleLines[0]
   );
+}
+
+export function parseStructuredDiffHunks(patch: string): StructuredDiffHunk[] {
+  if (patch.trim().length === 0) {
+    return [];
+  }
+
+  const lines = patch.split(/\r?\n/);
+  const hunks: StructuredDiffHunk[] = [];
+  let hunkCounter = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const header = lines[index];
+    const match = header.match(HUNK_HEADER_PATTERN);
+    if (!match) {
+      continue;
+    }
+
+    hunkCounter += 1;
+    const hunk: StructuredDiffHunk = {
+      id: `hunk_${hunkCounter}`,
+      oldStart: toPositiveInt(match[1], 0),
+      oldCount: toPositiveInt(match[2], 1),
+      newStart: toPositiveInt(match[3], 0),
+      newCount: toPositiveInt(match[4], 1),
+      header,
+      lines: [],
+    };
+
+    let currentOldLine = hunk.oldStart;
+    let currentNewLine = hunk.newStart;
+
+    for (index += 1; index < lines.length; index += 1) {
+      const rawLine = lines[index];
+      
+      if (rawLine.startsWith("@@ ")) {
+        index -= 1;
+        break;
+      }
+
+      if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
+        const text = rawLine.slice(1);
+        hunk.lines.push({
+          type: "add",
+          oldLine: null,
+          newLine: currentNewLine,
+          text,
+        });
+        currentNewLine += 1;
+        continue;
+      }
+
+      if (rawLine.startsWith("-") && !rawLine.startsWith("---")) {
+        const text = rawLine.slice(1);
+        hunk.lines.push({
+          type: "del",
+          oldLine: currentOldLine,
+          newLine: null,
+          text,
+        });
+        currentOldLine += 1;
+        continue;
+      }
+
+      if (rawLine.startsWith(" ")) {
+        const text = rawLine.slice(1);
+        hunk.lines.push({
+          type: "context",
+          oldLine: currentOldLine,
+          newLine: currentNewLine,
+          text,
+        });
+        currentOldLine += 1;
+        currentNewLine += 1;
+      }
+    }
+
+    hunks.push(hunk);
+  }
+
+  return hunks;
+}
+
+export interface AnchorResolutionResult {
+  line: number;
+  startLine?: number;
+  confidence: "exact" | "fuzzy" | "fallback";
+}
+
+export function resolveAnchorToGitHubLocation(params: {
+  anchorSnippet: string;
+  hunkId?: string;
+  hunks: StructuredDiffHunk[];
+  lineHint?: number;
+  allowFallback?: boolean;
+}): AnchorResolutionResult | undefined {
+  const { anchorSnippet, hunkId, hunks, lineHint, allowFallback = false } = params;
+
+  if (!anchorSnippet || anchorSnippet.trim().length === 0) {
+    return undefined;
+  }
+
+  const normalizedAnchor = normalizeSearchText(anchorSnippet);
+  const targetHunks = hunkId
+    ? hunks.filter((h) => h.id === hunkId)
+    : hunks;
+
+  if (targetHunks.length === 0) {
+    return undefined;
+  }
+
+  // Priority 1: Exact match in changed lines
+  for (const hunk of targetHunks) {
+    const changedLines = hunk.lines.filter((l) => l.type === "add");
+    
+    for (const line of changedLines) {
+      const normalizedLine = normalizeSearchText(line.text);
+      
+      if (
+        normalizedLine.includes(normalizedAnchor) ||
+        (normalizedAnchor.length >= 12 && normalizedAnchor.includes(normalizedLine))
+      ) {
+        return {
+          line: line.newLine!,
+          confidence: "exact",
+        };
+      }
+    }
+  }
+
+  // Priority 2: Fuzzy match with token overlap in changed lines
+  let bestMatch: { line: number; score: number; distance: number } | undefined;
+
+  for (const hunk of targetHunks) {
+    const changedLines = hunk.lines.filter((l) => l.type === "add");
+    
+    for (const line of changedLines) {
+      const overlap = tokenOverlapScore(normalizedAnchor, line.text);
+      const distance = lineHint && line.newLine
+        ? Math.abs(line.newLine - lineHint)
+        : Number.POSITIVE_INFINITY;
+
+      if (overlap.overlaps >= 3 && overlap.score >= 0.35) {
+        if (
+          !bestMatch ||
+          overlap.overlaps > bestMatch.score ||
+          (overlap.overlaps === bestMatch.score && distance < bestMatch.distance)
+        ) {
+          bestMatch = {
+            line: line.newLine!,
+            score: overlap.overlaps,
+            distance,
+          };
+        }
+      }
+    }
+  }
+
+  if (bestMatch) {
+    return {
+      line: bestMatch.line,
+      confidence: "fuzzy",
+    };
+  }
+
+  // Priority 3: Fallback to first changed line in target hunk (only if allowed)
+  if (allowFallback) {
+    for (const hunk of targetHunks) {
+      const firstChanged = hunk.lines.find((l) => l.type === "add");
+      if (firstChanged?.newLine) {
+        return {
+          line: firstChanged.newLine,
+          confidence: "fallback",
+        };
+      }
+    }
+  }
+
+  return undefined;
 }

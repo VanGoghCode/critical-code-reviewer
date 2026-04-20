@@ -1,4 +1,8 @@
-import { parseUnifiedDiffPatch, resolveChangedLine } from "./patch-map.js";
+import {
+  parseStructuredDiffHunks,
+  resolveAnchorToGitHubLocation,
+  type StructuredDiffHunk,
+} from "./patch-map.js";
 import type {
   ReviewFileInput,
   ReviewFinding,
@@ -138,11 +142,10 @@ function resolveFileRecord(
 function resolveInlineCommentCandidate(params: {
   finding: ReviewFinding;
   files: ReviewFileInput[];
-  patchCache: Map<string, ReturnType<typeof parseUnifiedDiffPatch>>;
+  hunkCache: Map<string, StructuredDiffHunk[]>;
   allowFallbackToFirstChangedLine: boolean;
 }): CandidateResolution {
-  const { finding, files, patchCache, allowFallbackToFirstChangedLine } =
-    params;
+  const { finding, files, hunkCache, allowFallbackToFirstChangedLine } = params;
 
   if (!finding.file || finding.file.trim().length === 0) {
     return { reason: "missing-file" };
@@ -154,41 +157,67 @@ function resolveInlineCommentCandidate(params: {
   }
 
   const patchCacheKey = fileRecord.path;
-  const patchMap =
-    patchCache.get(patchCacheKey) ??
-    parseUnifiedDiffPatch(fileRecord.patch ?? "");
-  patchCache.set(patchCacheKey, patchMap);
+  
+  // Parse structured hunks for anchor-based resolution
+  const hunks =
+    hunkCache.get(patchCacheKey) ??
+    parseStructuredDiffHunks(fileRecord.patch ?? "");
+  hunkCache.set(patchCacheKey, hunks);
 
-  if (patchMap.changedLines.length === 0) {
+  if (hunks.length === 0) {
     return { reason: "no-changed-lines" };
   }
 
-  const searchText = [
-    finding.detail,
-    finding.title,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const resolvedLine = resolveChangedLine({
-    patchMap,
-    requestedLine: finding.line,
-    searchText,
-    allowFallbackToFirstChangedLine,
-  });
-
-  if (typeof resolvedLine !== "number") {
+  // Use anchor snippet to resolve exact location
+  const anchorSnippet = finding.anchorSnippet || finding.detail;
+  
+  if (!anchorSnippet || anchorSnippet.trim().length === 0) {
     return { reason: "unresolved-line" };
   }
 
-  const dedupeKey = `${fileRecord.path}:${resolvedLine}:${finding.title
+  const anchorResult = resolveAnchorToGitHubLocation({
+    anchorSnippet,
+    hunkId: finding.hunkId,
+    hunks,
+    lineHint: finding.line,
+    allowFallback: allowFallbackToFirstChangedLine,
+  });
+
+  if (!anchorResult) {
+    if (allowFallbackToFirstChangedLine) {
+      // Fallback to first changed line in first hunk
+      const firstHunk = hunks[0];
+      const firstChanged = firstHunk.lines.find((l) => l.type === "add");
+      
+      if (firstChanged?.newLine) {
+        const dedupeKey = `${fileRecord.path}:${firstChanged.newLine}:${finding.title
+          .trim()
+          .toLowerCase()}`;
+
+        return {
+          candidate: {
+            path: fileRecord.path,
+            line: firstChanged.newLine,
+            body: formatInlineCommentBody(finding),
+            severity: finding.severity,
+            title: finding.title,
+            dedupeKey,
+          },
+        };
+      }
+    }
+    
+    return { reason: "unresolved-line" };
+  }
+
+  const dedupeKey = `${fileRecord.path}:${anchorResult.line}:${finding.title
     .trim()
     .toLowerCase()}`;
 
   return {
     candidate: {
       path: fileRecord.path,
-      line: resolvedLine,
+      line: anchorResult.line,
       body: formatInlineCommentBody(finding),
       severity: finding.severity,
       title: finding.title,
@@ -212,10 +241,7 @@ export function buildInlineReviewComments(
     };
   }
 
-  const patchCache = new Map<
-    string,
-    ReturnType<typeof parseUnifiedDiffPatch>
-  >();
+  const hunkCache = new Map<string, StructuredDiffHunk[]>();
   const commentKeys = new Set<string>();
   const comments: InlineReviewComment[] = [];
 
@@ -227,7 +253,7 @@ export function buildInlineReviewComments(
     const resolution = resolveInlineCommentCandidate({
       finding,
       files: options.files,
-      patchCache,
+      hunkCache,
       allowFallbackToFirstChangedLine,
     });
 

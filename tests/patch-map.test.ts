@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   parseUnifiedDiffPatch,
   resolveChangedLine,
+  parseStructuredDiffHunks,
+  resolveAnchorToGitHubLocation,
 } from "../src/core/patch-map";
 
 const SAMPLE_PATCH = [
@@ -63,5 +65,129 @@ describe("resolveChangedLine", () => {
     });
 
     expect(resolved).toBe(3);
+  });
+});
+
+describe("parseStructuredDiffHunks", () => {
+  it("parses diff hunks into structured format with line types", () => {
+    const hunks = parseStructuredDiffHunks(SAMPLE_PATCH);
+
+    expect(hunks).toHaveLength(1);
+    expect(hunks[0].id).toBe("hunk_1");
+    expect(hunks[0].oldStart).toBe(1);
+    expect(hunks[0].newStart).toBe(1);
+    expect(hunks[0].lines).toHaveLength(5);
+    
+    expect(hunks[0].lines[0]).toEqual({
+      type: "context",
+      oldLine: 1,
+      newLine: 1,
+      text: "const seed = 1;",
+    });
+    
+    expect(hunks[0].lines[1]).toEqual({
+      type: "del",
+      oldLine: 2,
+      newLine: null,
+      text: "const score = compute(raw);",
+    });
+    
+    expect(hunks[0].lines[2]).toEqual({
+      type: "add",
+      oldLine: null,
+      newLine: 2,
+      text: "const normalizedScore = compute(raw);",
+    });
+    
+    expect(hunks[0].lines[3]).toEqual({
+      type: "add",
+      oldLine: null,
+      newLine: 3,
+      text: "const teacherVisible = normalizedScore > 0.8;",
+    });
+
+    expect(hunks[0].lines[4]).toEqual({
+      type: "context",
+      oldLine: 3,
+      newLine: 4,
+      text: "export { normalizedScore };",
+    });
+  });
+});
+
+describe("resolveAnchorToGitHubLocation", () => {
+  it("resolves exact anchor snippet to correct line", () => {
+    const hunks = parseStructuredDiffHunks(SAMPLE_PATCH);
+    
+    const result = resolveAnchorToGitHubLocation({
+      anchorSnippet: "teacherVisible",
+      hunks,
+    });
+
+    expect(result).toEqual({
+      line: 3,
+      confidence: "exact",
+    });
+  });
+
+  it("resolves anchor with hunk ID constraint", () => {
+    const hunks = parseStructuredDiffHunks(SAMPLE_PATCH);
+    
+    const result = resolveAnchorToGitHubLocation({
+      anchorSnippet: "normalizedScore",
+      hunkId: "hunk_1",
+      hunks,
+    });
+
+    expect(result).toEqual({
+      line: 2,
+      confidence: "exact",
+    });
+  });
+
+  it("uses fuzzy matching when exact match fails", () => {
+    const hunks = parseStructuredDiffHunks(SAMPLE_PATCH);
+    
+    // This should match line 3 via fuzzy matching
+    // "const teacherVisible = normalizedScore > 0.8;"
+    const result = resolveAnchorToGitHubLocation({
+      anchorSnippet: "const teacherVisible normalizedScore",
+      hunks,
+    });
+
+    expect(result?.confidence).toBe("fuzzy");
+    expect(result?.line).toBe(3);
+  });
+
+  it("returns undefined for non-matching anchor", () => {
+    const hunks = parseStructuredDiffHunks(SAMPLE_PATCH);
+    
+    const result = resolveAnchorToGitHubLocation({
+      anchorSnippet: "nonexistent code snippet xyz",
+      hunks,
+    });
+
+    expect(result).toBeUndefined();
+  });
+
+  it("prefers line hint when multiple exact matches exist", () => {
+    const multiLinePatch = [
+      "@@ -1,2 +1,4 @@",
+      " const seed = 1;",
+      "+const value = compute(seed);",
+      "+const result = compute(value);",
+      " export { result };",
+    ].join("\n");
+    
+    const hunks = parseStructuredDiffHunks(multiLinePatch);
+    
+    // Both lines contain "compute", but line 3 is closer to hint
+    const result = resolveAnchorToGitHubLocation({
+      anchorSnippet: "compute",
+      hunks,
+      lineHint: 3,
+    });
+
+    expect(result?.line).toBe(2);
   });
 });
