@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildReviewConversationBody } from "../src/core/report";
+import { buildInlineReviewComments } from "../src/core/inline-comments";
+import {
+  buildReviewConversationBody,
+  parseReviewModelOutput,
+} from "../src/core/report";
 
 describe("buildReviewConversationBody", () => {
   it("includes broad findings plus reflective questions", () => {
@@ -58,5 +62,59 @@ describe("buildReviewConversationBody", () => {
     });
 
     expect(body).toBe("The PR is clean and no issues were found.");
+  });
+
+  it("preserves codeBlock so inline comments anchor to the matched code instead of prose", () => {
+    const parsed = parseReviewModelOutput(
+      JSON.stringify({
+        summary: "The parent dashboard flow needs stronger consent checks.",
+        riskLevel: "high",
+        findings: [
+          {
+            severity: "high",
+            title: "Missing Consent Checks for Learner Data",
+            detail:
+              "The `get_parent_dashboard()` endpoint returns grades after only checking `parent_child_relations`, so a parent could keep seeing student data after consent is revoked.",
+            file: "backend/main.py",
+            codeBlock: [
+              "+def get_parent_dashboard(parent_id: int):",
+              "+    relation = parent_child_relations.get(parent_id)",
+              "+    return build_dashboard(relation.student_id)",
+            ].join("\n"),
+            recommendation:
+              "Check active consent and revocation state before returning learner data.",
+          },
+        ],
+        todos: [],
+        notes: [],
+      }),
+    );
+
+    expect(parsed.findings[0]?.codeBlock).toContain(
+      "relation = parent_child_relations.get(parent_id)",
+    );
+
+    const inlineComments = buildInlineReviewComments({
+      findings: parsed.findings,
+      files: [
+        {
+          path: "backend/main.py",
+          name: "main.py",
+          content: "",
+          patch: [
+            "@@ -48,3 +48,6 @@",
+            ' DRAFT = "draft"',
+            ' PUBLISHED = "published"',
+            "+def get_parent_dashboard(parent_id: int):",
+            "+    relation = parent_child_relations.get(parent_id)",
+            "+    return build_dashboard(relation.student_id)",
+          ].join("\n"),
+        },
+      ],
+      maxComments: 10,
+    });
+
+    expect(inlineComments.comments).toHaveLength(1);
+    expect(inlineComments.comments[0]?.line).toBe(50);
   });
 });

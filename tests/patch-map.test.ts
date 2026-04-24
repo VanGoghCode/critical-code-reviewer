@@ -78,28 +78,28 @@ describe("parseStructuredDiffHunks", () => {
     expect(hunks[0].oldStart).toBe(1);
     expect(hunks[0].newStart).toBe(1);
     expect(hunks[0].lines).toHaveLength(5);
-    
+
     expect(hunks[0].lines[0]).toEqual({
       type: "context",
       oldLine: 1,
       newLine: 1,
       text: "const seed = 1;",
     });
-    
+
     expect(hunks[0].lines[1]).toEqual({
       type: "del",
       oldLine: 2,
       newLine: null,
       text: "const score = compute(raw);",
     });
-    
+
     expect(hunks[0].lines[2]).toEqual({
       type: "add",
       oldLine: null,
       newLine: 2,
       text: "const normalizedScore = compute(raw);",
     });
-    
+
     expect(hunks[0].lines[3]).toEqual({
       type: "add",
       oldLine: null,
@@ -119,7 +119,7 @@ describe("parseStructuredDiffHunks", () => {
 describe("resolveAnchorToGitHubLocation", () => {
   it("resolves exact anchor snippet to correct line", () => {
     const hunks = parseStructuredDiffHunks(SAMPLE_PATCH);
-    
+
     const result = resolveAnchorToGitHubLocation({
       anchorSnippet: "teacherVisible",
       hunks,
@@ -133,7 +133,7 @@ describe("resolveAnchorToGitHubLocation", () => {
 
   it("resolves anchor with hunk ID constraint", () => {
     const hunks = parseStructuredDiffHunks(SAMPLE_PATCH);
-    
+
     const result = resolveAnchorToGitHubLocation({
       anchorSnippet: "normalizedScore",
       hunkId: "hunk_1",
@@ -148,7 +148,7 @@ describe("resolveAnchorToGitHubLocation", () => {
 
   it("uses fuzzy matching when exact match fails", () => {
     const hunks = parseStructuredDiffHunks(SAMPLE_PATCH);
-    
+
     // This should match line 3 via fuzzy matching
     // "const teacherVisible = normalizedScore > 0.8;"
     const result = resolveAnchorToGitHubLocation({
@@ -162,7 +162,7 @@ describe("resolveAnchorToGitHubLocation", () => {
 
   it("returns undefined for non-matching anchor", () => {
     const hunks = parseStructuredDiffHunks(SAMPLE_PATCH);
-    
+
     const result = resolveAnchorToGitHubLocation({
       anchorSnippet: "nonexistent code snippet xyz",
       hunks,
@@ -179,9 +179,9 @@ describe("resolveAnchorToGitHubLocation", () => {
       "+const result = compute(value);",
       " export { result };",
     ].join("\n");
-    
+
     const hunks = parseStructuredDiffHunks(multiLinePatch);
-    
+
     // Both lines contain "compute", returns first match
     const result = resolveAnchorToGitHubLocation({
       anchorSnippet: "compute",
@@ -201,15 +201,15 @@ describe("resolveAnchorToGitHubLocation", () => {
       "+const teacherVisible = normalizedScore > 0.8;",
       " export { normalizedScore };",
     ].join("\n");
-    
+
     const hunks = parseStructuredDiffHunks(patch);
-    
+
     // AI provides a code block (with + prefix as it would appear in diff)
     const codeBlock = [
       "+const normalizedScore = compute(raw);",
       "+const teacherVisible = normalizedScore > 0.8;",
     ].join("\n");
-    
+
     const result = resolveCodeBlockToLine({
       codeBlock,
       hunks,
@@ -217,10 +217,10 @@ describe("resolveAnchorToGitHubLocation", () => {
     });
 
     expect(result?.line).toBe(2);
-    expect(["exact", "high"]).toContain(result?.confidence);
+    expect(result?.confidence).toBe("exact");
   });
 
-  it("resolves code block with partial match", () => {
+  it("returns undefined when the code block is not verbatim", () => {
     const patch = [
       "@@ -1,3 +1,4 @@",
       " const seed = 1;",
@@ -229,23 +229,21 @@ describe("resolveAnchorToGitHubLocation", () => {
       "+const teacherVisible = normalizedScore > 0.8;",
       " export { normalizedScore };",
     ].join("\n");
-    
+
     const hunks = parseStructuredDiffHunks(patch);
-    
-    // AI provides code block without the + prefix (AI might forget)
+
     const codeBlock = [
       "const normalizedScore = compute(raw);",
-      "const teacherVisible = normalizedScore > 0.8;",
+      "const teacherVisible = normalizedScore > 0.75;",
     ].join("\n");
-    
+
     const result = resolveCodeBlockToLine({
       codeBlock,
       hunks,
       preferChangedLines: true,
     });
 
-    expect(result?.line).toBe(2);
-    expect(["exact", "high"]).toContain(result?.confidence);
+    expect(result).toBeUndefined();
   });
 
   it("returns undefined for non-matching code block", () => {
@@ -257,17 +255,36 @@ describe("resolveAnchorToGitHubLocation", () => {
       "+const teacherVisible = normalizedScore > 0.8;",
       " export { normalizedScore };",
     ].join("\n");
-    
+
     const hunks = parseStructuredDiffHunks(patch);
-    
+
     const codeBlock = [
       "function nonexistentCode() {",
       "  return 'not in diff';",
       "}",
     ].join("\n");
-    
+
     const result = resolveCodeBlockToLine({
       codeBlock,
+      hunks,
+    });
+
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined when the same code block appears more than once", () => {
+    const patch = [
+      "@@ -1,2 +1,5 @@",
+      " const seed = 1;",
+      "+const teacherVisible = normalizedScore > 0.8;",
+      "+const teacherVisible = normalizedScore > 0.8;",
+      " export { normalizedScore };",
+    ].join("\n");
+
+    const hunks = parseStructuredDiffHunks(patch);
+
+    const result = resolveCodeBlockToLine({
+      codeBlock: "+const teacherVisible = normalizedScore > 0.8;",
       hunks,
     });
 

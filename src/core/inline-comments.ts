@@ -1,6 +1,5 @@
 import {
   parseStructuredDiffHunks,
-  resolveAnchorToGitHubLocation,
   resolveCodeBlockToLine,
   type StructuredDiffHunk,
 } from "./patch-map.js";
@@ -20,6 +19,7 @@ const SKIP_REASON_KEYS = [
   "missing-file",
   "unmatched-file",
   "no-changed-lines",
+  "missing-code-block",
   "unresolved-line",
   "duplicate",
 ] as const;
@@ -38,7 +38,6 @@ export interface InlineCommentBuildOptions {
   findings: ReviewFinding[];
   files: ReviewFileInput[];
   maxComments: number;
-  allowFallbackToFirstChangedLine?: boolean;
   strategy?: InlineCommentStrategy;
 }
 
@@ -69,6 +68,7 @@ function createSkipCounter(): Record<InlineCommentSkipReason, number> {
     "missing-file": 0,
     "unmatched-file": 0,
     "no-changed-lines": 0,
+    "missing-code-block": 0,
     "unresolved-line": 0,
     duplicate: 0,
   };
@@ -150,9 +150,8 @@ function resolveInlineCommentCandidate(params: {
   finding: ReviewFinding;
   files: ReviewFileInput[];
   hunkCache: Map<string, StructuredDiffHunk[]>;
-  allowFallbackToFirstChangedLine: boolean;
 }): CandidateResolution {
-  const { finding, files, hunkCache, allowFallbackToFirstChangedLine } = params;
+  const { finding, files, hunkCache } = params;
 
   if (!finding.file || finding.file.trim().length === 0) {
     return { reason: "missing-file" };
@@ -164,7 +163,7 @@ function resolveInlineCommentCandidate(params: {
   }
 
   const patchCacheKey = fileRecord.path;
-  
+
   // Parse structured hunks for anchor-based resolution
   const hunks =
     hunkCache.get(patchCacheKey) ??
@@ -175,85 +174,34 @@ function resolveInlineCommentCandidate(params: {
     return { reason: "no-changed-lines" };
   }
 
-  // Priority 1: Try to resolve using codeBlock (multi-line matching)
-  if (finding.codeBlock && finding.codeBlock.trim().length > 0) {
-    const codeBlockResult = resolveCodeBlockToLine({
-      codeBlock: finding.codeBlock,
-      hunks,
-      preferChangedLines: true,
-    });
-
-    if (codeBlockResult && codeBlockResult.confidence !== "low") {
-      const dedupeKey = `${fileRecord.path}:${codeBlockResult.line}:${finding.title
-        .trim()
-        .toLowerCase()}`;
-
-      return {
-        candidate: {
-          path: fileRecord.path,
-          line: codeBlockResult.line,
-          body: formatInlineCommentBody(finding, codeBlockResult.line),
-          severity: finding.severity,
-          title: finding.title,
-          dedupeKey,
-        },
-      };
-    }
+  if (!finding.codeBlock || finding.codeBlock.trim().length === 0) {
+    return { reason: "missing-code-block" };
   }
 
-  // Priority 2: Fall back to anchorSnippet (single-line matching)
-  const anchorSnippet = finding.anchorSnippet || finding.detail;
-  
-  if (anchorSnippet && anchorSnippet.trim().length > 0) {
-    const anchorResult = resolveAnchorToGitHubLocation({
-      anchorSnippet,
-      hunkId: finding.hunkId,
-      hunks,
-      allowFallback: allowFallbackToFirstChangedLine,
-    });
+  const codeBlockResult = resolveCodeBlockToLine({
+    codeBlock: finding.codeBlock,
+    hunks,
+    preferChangedLines: true,
+  });
 
-    if (anchorResult) {
-      const dedupeKey = `${fileRecord.path}:${anchorResult.line}:${finding.title
-        .trim()
-        .toLowerCase()}`;
-
-      return {
-        candidate: {
-          path: fileRecord.path,
-          line: anchorResult.line,
-          body: formatInlineCommentBody(finding, anchorResult.line),
-          severity: finding.severity,
-          title: finding.title,
-          dedupeKey,
-        },
-      };
-    }
+  if (!codeBlockResult) {
+    return { reason: "unresolved-line" };
   }
 
-  // Priority 3: Fallback to first changed line (only if allowed)
-  if (allowFallbackToFirstChangedLine) {
-    const firstHunk = hunks[0];
-    const firstChanged = firstHunk.lines.find((l) => l.type === "add");
-    
-    if (firstChanged?.newLine) {
-      const dedupeKey = `${fileRecord.path}:${firstChanged.newLine}:${finding.title
-        .trim()
-        .toLowerCase()}`;
+  const dedupeKey = `${fileRecord.path}:${codeBlockResult.line}:${finding.title
+    .trim()
+    .toLowerCase()}`;
 
-      return {
-        candidate: {
-          path: fileRecord.path,
-          line: firstChanged.newLine,
-          body: formatInlineCommentBody(finding, firstChanged.newLine),
-          severity: finding.severity,
-          title: finding.title,
-          dedupeKey,
-        },
-      };
-    }
-  }
-  
-  return { reason: "unresolved-line" };
+  return {
+    candidate: {
+      path: fileRecord.path,
+      line: codeBlockResult.line,
+      body: formatInlineCommentBody(finding, codeBlockResult.line),
+      severity: finding.severity,
+      title: finding.title,
+      dedupeKey,
+    },
+  };
 }
 
 export function buildInlineReviewComments(
@@ -275,16 +223,12 @@ export function buildInlineReviewComments(
   const commentKeys = new Set<string>();
   const comments: InlineReviewComment[] = [];
 
-  const allowFallbackToFirstChangedLine =
-    options.allowFallbackToFirstChangedLine ?? false;
-
   const candidates: InlineCommentCandidate[] = [];
   for (const finding of sortBySeverity(options.findings)) {
     const resolution = resolveInlineCommentCandidate({
       finding,
       files: options.files,
       hunkCache,
-      allowFallbackToFirstChangedLine,
     });
 
     if (resolution.reason) {

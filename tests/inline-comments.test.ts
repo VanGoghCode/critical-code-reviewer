@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildInlineReviewComments } from "../src/core/inline-comments";
 
 describe("buildInlineReviewComments", () => {
-  it("resolves comments using anchor snippets", () => {
+  it("resolves comments using an exact code block", () => {
     const result = buildInlineReviewComments({
       findings: [
         {
@@ -11,8 +11,10 @@ describe("buildInlineReviewComments", () => {
           detail:
             "The teacherVisible flag lacks confidence calibration checks.",
           file: "src/app/alerts.ts",
-          anchorSnippet: "teacherVisible",
-          hunkId: "hunk_1",
+          codeBlock: [
+            "+const normalizedScore = compute(raw);",
+            "+const teacherVisible = normalizedScore > 0.8;",
+          ].join("\n"),
           recommendation:
             "Gate visibility until confidence and consent checks both pass.",
         },
@@ -36,20 +38,18 @@ describe("buildInlineReviewComments", () => {
     });
 
     expect(result.comments).toHaveLength(1);
-    expect(result.comments[0].line).toBe(3);
+    expect(result.comments[0].line).toBe(2);
     expect(result.comments[0].path).toBe("src/app/alerts.ts");
   });
 
-  it("skips findings when anchor snippet cannot be resolved", () => {
+  it("skips findings when codeBlock is missing instead of guessing from prose", () => {
     const result = buildInlineReviewComments({
       findings: [
         {
           severity: "high",
           title: "Protected Attribute Governance",
-          detail:
-            "This code has an issue that needs attention.",
+          detail: "The normalizedScore computation lacks calibration.",
           file: "src/app/alerts.ts",
-          anchorSnippet: "nonexistentCodeThatWillNeverMatch",
           recommendation:
             "Gate visibility until confidence and consent checks both pass.",
         },
@@ -70,21 +70,25 @@ describe("buildInlineReviewComments", () => {
         },
       ],
       maxComments: 10,
-      allowFallbackToFirstChangedLine: false,
     });
 
     expect(result.comments).toHaveLength(0);
-    expect(result.skippedByReason["unresolved-line"]).toBe(1);
+    expect(result.skippedByReason["missing-code-block"]).toBe(1);
   });
 
-  it("falls back to detail text when anchor snippet is missing", () => {
+  it("skips findings when the provided codeBlock does not match the diff exactly", () => {
     const result = buildInlineReviewComments({
       findings: [
         {
           severity: "high",
           title: "Protected Attribute Governance",
-          detail: "The normalizedScore computation lacks calibration.",
+          detail:
+            "The teacherVisible flag lacks confidence calibration checks.",
           file: "src/app/alerts.ts",
+          codeBlock: [
+            "+const normalizedScore = compute(raw);",
+            "+const teacherVisible = normalizedScore > 0.75;",
+          ].join("\n"),
           recommendation: "Add confidence checks.",
         },
       ],
@@ -104,11 +108,10 @@ describe("buildInlineReviewComments", () => {
         },
       ],
       maxComments: 10,
-      allowFallbackToFirstChangedLine: true,
     });
 
-    expect(result.comments).toHaveLength(1);
-    expect(result.comments[0].line).toBe(2);
+    expect(result.comments).toHaveLength(0);
+    expect(result.skippedByReason["unresolved-line"]).toBe(1);
   });
 
   it("includes line notation in comment body", () => {
@@ -117,10 +120,12 @@ describe("buildInlineReviewComments", () => {
         {
           severity: "high",
           title: "Protected Attribute Governance",
-          detail: "The teacherVisible flag lacks confidence calibration checks.",
+          detail:
+            "The teacherVisible flag lacks confidence calibration checks.",
           file: "src/app/alerts.ts",
-          anchorSnippet: "teacherVisible",
-          recommendation: "Gate visibility until confidence and consent checks both pass.",
+          codeBlock: "+const teacherVisible = normalizedScore > 0.8;",
+          recommendation:
+            "Gate visibility until confidence and consent checks both pass.",
         },
       ],
       files: [
@@ -143,7 +148,9 @@ describe("buildInlineReviewComments", () => {
 
     expect(result.comments).toHaveLength(1);
     expect(result.comments[0].body).toContain("Comment on line 3");
-    expect(result.comments[0].body).toContain("**Protected Attribute Governance**");
+    expect(result.comments[0].body).toContain(
+      "**Protected Attribute Governance**",
+    );
   });
 
   it("resolves comments using codeBlock", () => {
@@ -152,13 +159,15 @@ describe("buildInlineReviewComments", () => {
         {
           severity: "high",
           title: "Protected Attribute Governance",
-          detail: "The teacherVisible flag lacks confidence calibration checks.",
+          detail:
+            "The teacherVisible flag lacks confidence calibration checks.",
           file: "src/app/alerts.ts",
           codeBlock: [
             "+const normalizedScore = compute(raw);",
             "+const teacherVisible = normalizedScore > 0.8;",
           ].join("\n"),
-          recommendation: "Gate visibility until confidence and consent checks both pass.",
+          recommendation:
+            "Gate visibility until confidence and consent checks both pass.",
         },
       ],
       files: [
@@ -184,17 +193,21 @@ describe("buildInlineReviewComments", () => {
     expect(result.comments[0].body).toContain("Comment on line 2");
   });
 
-  it("prefers codeBlock over anchorSnippet", () => {
+  it("anchors using the first line of the matched code block", () => {
     const result = buildInlineReviewComments({
       findings: [
         {
           severity: "high",
           title: "Protected Attribute Governance",
-          detail: "The teacherVisible flag lacks confidence calibration checks.",
+          detail:
+            "The teacherVisible flag lacks confidence calibration checks.",
           file: "src/app/alerts.ts",
-          codeBlock: "+const teacherVisible = normalizedScore > 0.8;",
-          anchorSnippet: "normalizedScore", // Different from codeBlock
-          recommendation: "Gate visibility until confidence and consent checks both pass.",
+          codeBlock: [
+            "+const normalizedScore = compute(raw);",
+            "+const teacherVisible = normalizedScore > 0.8;",
+          ].join("\n"),
+          recommendation:
+            "Gate visibility until confidence and consent checks both pass.",
         },
       ],
       files: [
@@ -216,9 +229,6 @@ describe("buildInlineReviewComments", () => {
     });
 
     expect(result.comments).toHaveLength(1);
-    // codeBlock should resolve to line 3 (teacherVisible)
-    // anchorSnippet would resolve to line 2 (normalizedScore)
-    // We expect codeBlock to take priority
-    expect(result.comments[0].line).toBe(3);
+    expect(result.comments[0].line).toBe(2);
   });
 });

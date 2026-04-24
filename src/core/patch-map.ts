@@ -427,7 +427,7 @@ export function parseStructuredDiffHunks(patch: string): StructuredDiffHunk[] {
 
     for (index += 1; index < lines.length; index += 1) {
       const rawLine = lines[index];
-      
+
       if (rawLine.startsWith("@@ ")) {
         index -= 1;
         break;
@@ -494,9 +494,7 @@ export function resolveAnchorToGitHubLocation(params: {
   }
 
   const normalizedAnchor = normalizeSearchText(anchorSnippet);
-  const targetHunks = hunkId
-    ? hunks.filter((h) => h.id === hunkId)
-    : hunks;
+  const targetHunks = hunkId ? hunks.filter((h) => h.id === hunkId) : hunks;
 
   if (targetHunks.length === 0) {
     return undefined;
@@ -505,13 +503,14 @@ export function resolveAnchorToGitHubLocation(params: {
   // Priority 1: Exact match in changed lines
   for (const hunk of targetHunks) {
     const changedLines = hunk.lines.filter((l) => l.type === "add");
-    
+
     for (const line of changedLines) {
       const normalizedLine = normalizeSearchText(line.text);
-      
+
       if (
         normalizedLine.includes(normalizedAnchor) ||
-        (normalizedAnchor.length >= 12 && normalizedAnchor.includes(normalizedLine))
+        (normalizedAnchor.length >= 12 &&
+          normalizedAnchor.includes(normalizedLine))
       ) {
         return {
           line: line.newLine!,
@@ -526,7 +525,7 @@ export function resolveAnchorToGitHubLocation(params: {
 
   for (const hunk of targetHunks) {
     const changedLines = hunk.lines.filter((l) => l.type === "add");
-    
+
     for (const line of changedLines) {
       const overlap = tokenOverlapScore(normalizedAnchor, line.text);
 
@@ -573,71 +572,81 @@ export function resolveAnchorToGitHubLocation(params: {
 function normalizeCodeLine(line: string): string {
   // Remove diff prefixes (+, -, space)
   let normalized = line.trim();
-  if (normalized.startsWith("+") || normalized.startsWith("-") || normalized.startsWith(" ")) {
+  if (
+    normalized.startsWith("+") ||
+    normalized.startsWith("-") ||
+    normalized.startsWith(" ")
+  ) {
     normalized = normalized.slice(1);
   }
   return normalizeSearchText(normalized);
+}
+
+interface NormalizedCodeBlockLine {
+  type: "add" | "del" | "context" | "unknown";
+  text: string;
+}
+
+function normalizeCodeBlockLine(
+  line: string,
+): NormalizedCodeBlockLine | undefined {
+  const raw = line.replace(/\r$/, "");
+  if (raw.trim().length === 0) {
+    return undefined;
+  }
+
+  if (raw.startsWith("+")) {
+    return {
+      type: "add",
+      text: normalizeSearchText(raw.slice(1)),
+    };
+  }
+
+  if (raw.startsWith("-")) {
+    return {
+      type: "del",
+      text: normalizeSearchText(raw.slice(1)),
+    };
+  }
+
+  if (raw.startsWith(" ")) {
+    return {
+      type: "context",
+      text: normalizeSearchText(raw.slice(1)),
+    };
+  }
+
+  return {
+    type: "unknown",
+    text: normalizeCodeLine(raw),
+  };
 }
 
 /**
  * Extracts the core code lines from a code block, removing diff prefixes
  * and normalizing for comparison.
  */
-function extractCodeBlockLines(codeBlock: string): string[] {
+function extractCodeBlockLines(codeBlock: string): NormalizedCodeBlockLine[] {
   return codeBlock
     .split(/\r?\n/)
-    .map((line) => normalizeCodeLine(line))
-    .filter((line) => line.length > 0);
-}
-
-/**
- * Calculates a similarity score between two arrays of normalized lines.
- * Returns a score between 0 and 1, where 1 is a perfect match.
- */
-function calculateBlockSimilarity(
-  blockLines: string[],
-  candidateLines: string[],
-): number {
-  if (blockLines.length === 0 || candidateLines.length === 0) {
-    return 0;
-  }
-
-  let matchCount = 0;
-  let totalTokens = 0;
-
-  for (let i = 0; i < blockLines.length; i++) {
-    const blockLine = blockLines[i];
-    // Allow for offset - the candidate might not start at the same relative position
-    const candidateIndex = Math.min(i, candidateLines.length - 1);
-    const candidateLine = candidateLines[candidateIndex];
-
-    const blockTokens = tokenize(blockLine);
-    const candidateTokens = new Set(tokenize(candidateLine));
-
-    totalTokens += blockTokens.length;
-    for (const token of blockTokens) {
-      if (candidateTokens.has(token)) {
-        matchCount += 1;
-      }
-    }
-  }
-
-  return totalTokens > 0 ? matchCount / totalTokens : 0;
+    .map((line) => normalizeCodeBlockLine(line))
+    .filter((line): line is NormalizedCodeBlockLine => Boolean(line));
 }
 
 export interface CodeBlockMatchResult {
   line: number;
-  confidence: "exact" | "high" | "medium" | "low";
+  confidence: "exact";
   matchedLines: number;
 }
 
 /**
- * Resolves a multi-line code block to a specific line in the diff.
- * 
- * This function takes a code block (3-7 lines) provided by the AI and finds
- * the best matching location in the diff. It uses a sliding window approach
- * to find the region with the highest similarity score.
- * 
+ * Resolves a verbatim code block to a specific line in the diff.
+ *
+ * This matcher is intentionally strict. It only accepts a contiguous block that
+ * exactly matches the diff text after whitespace normalization. If the block is
+ * missing, non-verbatim, or ambiguous, the caller should skip inline posting
+ * instead of guessing.
+ *
  * @param codeBlock - The code block from the AI (should include +/- prefixes)
  * @param hunks - The parsed diff hunks
  * @param preferChangedLines - If true, prefer matching in changed lines (default: true)
@@ -659,99 +668,69 @@ export function resolveCodeBlockToLine(params: {
     return undefined;
   }
 
-  // Collect all lines from the diff with their positions
-  const allDiffLines: Array<{ line: number; text: string; type: "add" | "del" | "context" }> = [];
-  
+  const matches: Array<{
+    anchorLine: number;
+    matchedLines: number;
+    hasChangedLine: boolean;
+  }> = [];
+
   for (const hunk of hunks) {
-    for (const diffLine of hunk.lines) {
-      if (diffLine.newLine !== null) {
-        allDiffLines.push({
-          line: diffLine.newLine,
-          text: diffLine.text,
-          type: diffLine.type,
-        });
+    const windowSize = blockLines.length;
+    for (
+      let startIdx = 0;
+      startIdx <= hunk.lines.length - windowSize;
+      startIdx += 1
+    ) {
+      const windowLines = hunk.lines.slice(startIdx, startIdx + windowSize);
+      const isExactWindowMatch = blockLines.every((blockLine, index) => {
+        const diffLine = windowLines[index];
+        const normalizedDiffLine = normalizeSearchText(diffLine.text);
+        return (
+          blockLine.text === normalizedDiffLine &&
+          (blockLine.type === "unknown" || blockLine.type === diffLine.type)
+        );
+      });
+
+      if (!isExactWindowMatch) {
+        continue;
       }
+
+      const preferredAnchor =
+        windowLines.find(
+          (line) => line.type === "add" && line.newLine !== null,
+        ) ?? windowLines.find((line) => line.newLine !== null);
+
+      if (!preferredAnchor?.newLine) {
+        continue;
+      }
+
+      matches.push({
+        anchorLine: preferredAnchor.newLine,
+        matchedLines: blockLines.length,
+        hasChangedLine: windowLines.some((line) => line.type === "add"),
+      });
     }
   }
 
-  if (allDiffLines.length === 0) {
+  if (matches.length === 0) {
     return undefined;
   }
 
-  // Sort by line number
-  allDiffLines.sort((a, b) => a.line - b.line);
+  const preferredMatches = preferChangedLines
+    ? matches.filter((match) => match.hasChangedLine)
+    : matches;
+  const candidateMatches =
+    preferredMatches.length > 0 ? preferredMatches : matches;
 
-  // Try to find the best matching window
-  let bestMatch: { line: number; score: number; matchedLines: number } | undefined;
-  const windowSize = blockLines.length;
-
-  // Sliding window approach
-  for (let startIdx = 0; startIdx <= allDiffLines.length - windowSize; startIdx++) {
-    const windowLines = allDiffLines.slice(startIdx, startIdx + windowSize);
-    
-    // Check if this window contains changed lines (if we prefer them)
-    const hasChangedLines = windowLines.some((l) => l.type === "add");
-    
-    // Extract text from window
-    const candidateTexts = windowLines.map((l) => l.text);
-    
-    // Calculate similarity
-    const similarity = calculateBlockSimilarity(blockLines, candidateTexts);
-    
-    // Boost score if we prefer changed lines and this window has them
-    const adjustedScore = preferChangedLines && hasChangedLines ? similarity * 1.2 : similarity;
-    
-    if (adjustedScore >= 0.5) {
-      if (!bestMatch || adjustedScore > bestMatch.score) {
-        bestMatch = {
-          line: windowLines[0].line,
-          score: adjustedScore,
-          matchedLines: windowLines.filter((l) => l.type === "add").length || windowLines.length,
-        };
-      }
-    }
-  }
-
-  // Also try matching individual lines for single-line code blocks
-  if (!bestMatch && blockLines.length === 1) {
-    const singleLine = blockLines[0];
-    
-    for (const diffLine of allDiffLines) {
-      if (diffLine.type !== "add") continue;
-      
-      const overlap = tokenOverlapScore(singleLine, diffLine.text);
-      
-      if (overlap.overlaps >= 3 && overlap.score >= 0.5) {
-        if (!bestMatch || overlap.score > bestMatch.score) {
-          bestMatch = {
-            line: diffLine.line,
-            score: overlap.score,
-            matchedLines: 1,
-          };
-        }
-      }
-    }
-  }
-
-  if (!bestMatch) {
+  if (candidateMatches.length !== 1) {
     return undefined;
   }
 
-  // Determine confidence level
-  let confidence: CodeBlockMatchResult["confidence"];
-  if (bestMatch.score >= 0.9) {
-    confidence = "exact";
-  } else if (bestMatch.score >= 0.75) {
-    confidence = "high";
-  } else if (bestMatch.score >= 0.6) {
-    confidence = "medium";
-  } else {
-    confidence = "low";
-  }
+  const match = candidateMatches[0];
 
   return {
-    line: bestMatch.line,
-    confidence,
-    matchedLines: bestMatch.matchedLines,
+    line: match.anchorLine,
+    confidence: "exact",
+    matchedLines: match.matchedLines,
   };
 }

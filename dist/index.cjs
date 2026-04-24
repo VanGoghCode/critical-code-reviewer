@@ -29760,6 +29760,7 @@ var findingSchema = external_exports.object({
   recommendation: external_exports.string().optional(),
   suggestion: external_exports.string().optional(),
   anchorSnippet: external_exports.string().optional(),
+  codeBlock: external_exports.string().optional(),
   hunkId: external_exports.string().optional(),
   line: external_exports.number().int().positive().optional()
 });
@@ -29824,8 +29825,7 @@ function formatFindings(findings) {
     return "No findings were returned by the review model.";
   }
   return findings.map((finding) => {
-    const lineLocation = typeof finding.line === "number" ? `:${finding.line}` : "";
-    const location = finding.file ? ` (${finding.file}${lineLocation})` : "";
+    const location = finding.file ? ` (${finding.file})` : "";
     const recommendation = finding.recommendation ?? finding.suggestion;
     const recommendationLine = recommendation ? `
   Recommendation: ${recommendation}` : "";
@@ -30011,29 +30011,6 @@ function toPositiveInt(raw, fallback) {
 function normalizeSearchText(value) {
   return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
 }
-function tokenize(value) {
-  return normalizeSearchText(value).split(/[^a-z0-9]+/).filter((token) => token.length >= 3);
-}
-function tokenOverlapScore(candidate, line) {
-  const candidateTokens = tokenize(candidate);
-  if (candidateTokens.length === 0) {
-    return {
-      score: 0,
-      overlaps: 0
-    };
-  }
-  const lineTokens = new Set(tokenize(line));
-  let overlaps = 0;
-  for (const token of candidateTokens) {
-    if (lineTokens.has(token)) {
-      overlaps += 1;
-    }
-  }
-  return {
-    score: overlaps / candidateTokens.length,
-    overlaps
-  };
-}
 function parseStructuredDiffHunks(patch) {
   if (patch.trim().length === 0) {
     return [];
@@ -30103,63 +30080,93 @@ function parseStructuredDiffHunks(patch) {
   }
   return hunks;
 }
-function resolveAnchorToGitHubLocation(params) {
-  const { anchorSnippet, hunkId, hunks, lineHint, allowFallback = false } = params;
-  if (!anchorSnippet || anchorSnippet.trim().length === 0) {
+function normalizeCodeLine(line) {
+  let normalized = line.trim();
+  if (normalized.startsWith("+") || normalized.startsWith("-") || normalized.startsWith(" ")) {
+    normalized = normalized.slice(1);
+  }
+  return normalizeSearchText(normalized);
+}
+function normalizeCodeBlockLine(line) {
+  const raw = line.replace(/\r$/, "");
+  if (raw.trim().length === 0) {
     return void 0;
   }
-  const normalizedAnchor = normalizeSearchText(anchorSnippet);
-  const targetHunks = hunkId ? hunks.filter((h) => h.id === hunkId) : hunks;
-  if (targetHunks.length === 0) {
-    return void 0;
-  }
-  for (const hunk of targetHunks) {
-    const changedLines = hunk.lines.filter((l) => l.type === "add");
-    for (const line of changedLines) {
-      const normalizedLine = normalizeSearchText(line.text);
-      if (normalizedLine.includes(normalizedAnchor) || normalizedAnchor.length >= 12 && normalizedAnchor.includes(normalizedLine)) {
-        return {
-          line: line.newLine,
-          confidence: "exact"
-        };
-      }
-    }
-  }
-  let bestMatch;
-  for (const hunk of targetHunks) {
-    const changedLines = hunk.lines.filter((l) => l.type === "add");
-    for (const line of changedLines) {
-      const overlap = tokenOverlapScore(normalizedAnchor, line.text);
-      const distance = lineHint && line.newLine ? Math.abs(line.newLine - lineHint) : Number.POSITIVE_INFINITY;
-      if (overlap.overlaps >= 3 && overlap.score >= 0.35) {
-        if (!bestMatch || overlap.overlaps > bestMatch.score || overlap.overlaps === bestMatch.score && distance < bestMatch.distance) {
-          bestMatch = {
-            line: line.newLine,
-            score: overlap.overlaps,
-            distance
-          };
-        }
-      }
-    }
-  }
-  if (bestMatch) {
+  if (raw.startsWith("+")) {
     return {
-      line: bestMatch.line,
-      confidence: "fuzzy"
+      type: "add",
+      text: normalizeSearchText(raw.slice(1))
     };
   }
-  if (allowFallback) {
-    for (const hunk of targetHunks) {
-      const firstChanged = hunk.lines.find((l) => l.type === "add");
-      if (firstChanged?.newLine) {
-        return {
-          line: firstChanged.newLine,
-          confidence: "fallback"
-        };
+  if (raw.startsWith("-")) {
+    return {
+      type: "del",
+      text: normalizeSearchText(raw.slice(1))
+    };
+  }
+  if (raw.startsWith(" ")) {
+    return {
+      type: "context",
+      text: normalizeSearchText(raw.slice(1))
+    };
+  }
+  return {
+    type: "unknown",
+    text: normalizeCodeLine(raw)
+  };
+}
+function extractCodeBlockLines(codeBlock) {
+  return codeBlock.split(/\r?\n/).map((line) => normalizeCodeBlockLine(line)).filter((line) => Boolean(line));
+}
+function resolveCodeBlockToLine(params) {
+  const { codeBlock, hunks, preferChangedLines = true } = params;
+  if (!codeBlock || codeBlock.trim().length === 0) {
+    return void 0;
+  }
+  const blockLines = extractCodeBlockLines(codeBlock);
+  if (blockLines.length === 0) {
+    return void 0;
+  }
+  const matches = [];
+  for (const hunk of hunks) {
+    const windowSize = blockLines.length;
+    for (let startIdx = 0; startIdx <= hunk.lines.length - windowSize; startIdx += 1) {
+      const windowLines = hunk.lines.slice(startIdx, startIdx + windowSize);
+      const isExactWindowMatch = blockLines.every((blockLine, index) => {
+        const diffLine = windowLines[index];
+        const normalizedDiffLine = normalizeSearchText(diffLine.text);
+        return blockLine.text === normalizedDiffLine && (blockLine.type === "unknown" || blockLine.type === diffLine.type);
+      });
+      if (!isExactWindowMatch) {
+        continue;
       }
+      const preferredAnchor = windowLines.find(
+        (line) => line.type === "add" && line.newLine !== null
+      ) ?? windowLines.find((line) => line.newLine !== null);
+      if (!preferredAnchor?.newLine) {
+        continue;
+      }
+      matches.push({
+        anchorLine: preferredAnchor.newLine,
+        matchedLines: blockLines.length,
+        hasChangedLine: windowLines.some((line) => line.type === "add")
+      });
     }
   }
-  return void 0;
+  if (matches.length === 0) {
+    return void 0;
+  }
+  const preferredMatches = preferChangedLines ? matches.filter((match2) => match2.hasChangedLine) : matches;
+  const candidateMatches = preferredMatches.length > 0 ? preferredMatches : matches;
+  if (candidateMatches.length !== 1) {
+    return void 0;
+  }
+  const match = candidateMatches[0];
+  return {
+    line: match.anchorLine,
+    confidence: "exact",
+    matchedLines: match.matchedLines
+  };
 }
 
 // src/core/engine.ts
@@ -31018,10 +31025,8 @@ function normalizeCommentBody(body) {
 }
 function toCommentDedupeKey(comment) {
   const normalizedLine = Math.round(comment.line);
-  const normalizedStartLine = typeof comment.startLine === "number" && comment.startLine < normalizedLine ? Math.round(comment.startLine) : normalizedLine;
   return [
     normalizePath(comment.path),
-    String(normalizedStartLine),
     String(normalizedLine),
     normalizeCommentBody(comment.body)
   ].join(":");
@@ -31053,7 +31058,6 @@ async function publishInlineReview(params) {
       toCommentDedupeKey({
         path: comment.path,
         line: comment.line,
-        startLine: typeof comment.start_line === "number" ? comment.start_line : void 0,
         body: comment.body
       })
     );
@@ -31072,19 +31076,12 @@ async function publishInlineReview(params) {
     pull_number: params.pullNumber,
     event: "COMMENT",
     body: params.reviewBody,
-    comments: commentsToPost.map((comment) => {
-      const hasRange = typeof comment.startLine === "number" && comment.startLine < comment.line;
-      return {
-        path: comment.path,
-        line: comment.line,
-        side: "RIGHT",
-        ...hasRange ? {
-          start_line: comment.startLine,
-          start_side: "RIGHT"
-        } : {},
-        body: comment.body
-      };
-    }),
+    comments: commentsToPost.map((comment) => ({
+      path: comment.path,
+      line: comment.line,
+      side: "RIGHT",
+      body: comment.body
+    })),
     commit_id: params.commitId
   });
   return {
@@ -31104,6 +31101,7 @@ function createSkipCounter() {
     "missing-file": 0,
     "unmatched-file": 0,
     "no-changed-lines": 0,
+    "missing-code-block": 0,
     "unresolved-line": 0,
     duplicate: 0
   };
@@ -31111,13 +31109,16 @@ function createSkipCounter() {
 function normalizePath2(pathValue) {
   return pathValue.replaceAll("\\", "/").trim().toLowerCase();
 }
-function formatInlineCommentBody(finding) {
+function formatInlineCommentBody(finding, line) {
   const recommendation = finding.recommendation ?? finding.suggestion;
-  const parts = [
-    `**${finding.title.trim()}**
-`,
-    finding.detail.trim()
-  ];
+  const parts = [];
+  if (typeof line === "number") {
+    parts.push(`_Comment on line ${line}_
+`);
+  }
+  parts.push(`**${finding.title.trim()}**
+`);
+  parts.push(finding.detail.trim());
   const rec = (recommendation ?? "").trim();
   if (rec.length > 0) {
     parts.push(rec);
@@ -31153,7 +31154,7 @@ function resolveFileRecord(findingFile, files) {
   )[0];
 }
 function resolveInlineCommentCandidate(params) {
-  const { finding, files, hunkCache, allowFallbackToFirstChangedLine } = params;
+  const { finding, files, hunkCache } = params;
   if (!finding.file || finding.file.trim().length === 0) {
     return { reason: "missing-file" };
   }
@@ -31167,43 +31168,23 @@ function resolveInlineCommentCandidate(params) {
   if (hunks.length === 0) {
     return { reason: "no-changed-lines" };
   }
-  const anchorSnippet = finding.anchorSnippet || finding.detail;
-  if (!anchorSnippet || anchorSnippet.trim().length === 0) {
-    return { reason: "unresolved-line" };
+  if (!finding.codeBlock || finding.codeBlock.trim().length === 0) {
+    return { reason: "missing-code-block" };
   }
-  const anchorResult = resolveAnchorToGitHubLocation({
-    anchorSnippet,
-    hunkId: finding.hunkId,
+  const codeBlockResult = resolveCodeBlockToLine({
+    codeBlock: finding.codeBlock,
     hunks,
-    lineHint: finding.line,
-    allowFallback: allowFallbackToFirstChangedLine
+    preferChangedLines: true
   });
-  if (!anchorResult) {
-    if (allowFallbackToFirstChangedLine) {
-      const firstHunk = hunks[0];
-      const firstChanged = firstHunk.lines.find((l) => l.type === "add");
-      if (firstChanged?.newLine) {
-        const dedupeKey2 = `${fileRecord.path}:${firstChanged.newLine}:${finding.title.trim().toLowerCase()}`;
-        return {
-          candidate: {
-            path: fileRecord.path,
-            line: firstChanged.newLine,
-            body: formatInlineCommentBody(finding),
-            severity: finding.severity,
-            title: finding.title,
-            dedupeKey: dedupeKey2
-          }
-        };
-      }
-    }
+  if (!codeBlockResult) {
     return { reason: "unresolved-line" };
   }
-  const dedupeKey = `${fileRecord.path}:${anchorResult.line}:${finding.title.trim().toLowerCase()}`;
+  const dedupeKey = `${fileRecord.path}:${codeBlockResult.line}:${finding.title.trim().toLowerCase()}`;
   return {
     candidate: {
       path: fileRecord.path,
-      line: anchorResult.line,
-      body: formatInlineCommentBody(finding),
+      line: codeBlockResult.line,
+      body: formatInlineCommentBody(finding, codeBlockResult.line),
       severity: finding.severity,
       title: finding.title,
       dedupeKey
@@ -31224,14 +31205,12 @@ function buildInlineReviewComments(options) {
   const hunkCache = /* @__PURE__ */ new Map();
   const commentKeys = /* @__PURE__ */ new Set();
   const comments = [];
-  const allowFallbackToFirstChangedLine = options.allowFallbackToFirstChangedLine ?? false;
   const candidates = [];
   for (const finding of sortBySeverity(options.findings)) {
     const resolution = resolveInlineCommentCandidate({
       finding,
       files: options.files,
-      hunkCache,
-      allowFallbackToFirstChangedLine
+      hunkCache
     });
     if (resolution.reason) {
       skippedByReason[resolution.reason] += 1;
@@ -31250,7 +31229,6 @@ function buildInlineReviewComments(options) {
     comments.push({
       path: candidate.path,
       line: candidate.line,
-      startLine: candidate.startLine,
       body: candidate.body,
       severity: candidate.severity,
       title: candidate.title
@@ -31753,8 +31731,7 @@ async function main() {
           findings: result.report.findings,
           files,
           maxComments: inlineCommentLimit,
-          strategy: inlineCommentMode,
-          allowFallbackToFirstChangedLine: false
+          strategy: inlineCommentMode
         });
         inlineCommentsSkipped = inlineCommentResult.skippedCount;
         if (inlineCommentResult.comments.length === 0) {

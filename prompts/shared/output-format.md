@@ -36,7 +36,7 @@ Return a single JSON object — no Markdown fences, no surrounding prose.
   - `title`: The associated framework criterion name (or closest criterion family). Do not use generic issue labels.
   - `detail`: 30-55 words, complete sentences. **CRITICAL: Start with the exact code snippet, variable name, function name, or field name from the diff** (e.g., "The `risk_score` field in the Alert interface..." or "The `getAlerts()` function call..."). Then explain the concrete issue, why it matters, who is affected, and how. Use specific stakeholder language: `a student`, `a teacher`, `a parent`, `a counselor`, `a Black student`, `an English-learner student`, etc. Never use generic `user` or `users`.
   - `file`: Exact path from the diff input (required — never omit).
-  - `codeBlock`: **REQUIRED**. Copy 3-7 lines of actual code from the diff that you are commenting on. This MUST be verbatim code from the diff input you received. Include the `+` prefix for added lines and `-` prefix for removed lines. Do not invent, modify, or paraphrase code — copy it exactly as shown in the diff. This is used to precisely locate where to place the comment.
+  - `codeBlock`: **REQUIRED**. Copy 3-7 lines of actual code from the diff that you are commenting on. This MUST be verbatim code from the diff input you received. Include the `+` prefix for added lines and `-` prefix for removed lines. Do not invent, modify, or paraphrase code — copy it exactly as shown in the diff. Runtime will only place inline comments when this block matches the diff exactly.
   - `severity`: "low" | "medium" | "high". This goes in the severity field only — never include it as a prefix in the text.
   - `recommendation`: One small logic suggestion in plain but polite language, no label prefix, followed by a CCR reference link on a new line in the format: `📎 [CRIT-X.Y · Criterion Name](https://github.com/VanGoghCode/critical-code-reviewer/blob/main/ccr-framework.md#crit-x-y)` where X.Y matches the criterion ID from the framework.
 - `todos`: Action items for the PR author.
@@ -65,12 +65,8 @@ Runtime posts one broader main review comment that combines:
 - If no issues found, return findings as an empty array [].
 - Each finding must reference real code from the changed files.
 - Do not fabricate file paths or code snippets.
-- **ANCHOR SNIPPET GUIDELINES:**
-  - Choose a distinctive piece of code that clearly identifies what you're flagging
-  - Good examples: variable names (`studentId`), function calls (`validateUser()`), unique expressions (`normalizedScore > 0.8`)
-  - Bad examples: generic keywords (`if`, `return`, `const`), common operators (`=`, `+`)
-  - If you mention multiple code elements in `detail`, choose the most important one for `anchorSnippet`
-  - The snippet should be something a developer can easily find in the changed code
+- Runtime ignores guessed line numbers and weak text guesses for inline placement.
+- If you cannot supply an exact verbatim `codeBlock`, the finding may still appear in the main review body, but the inline comment will be skipped.
 - Use reviewContext.commitMessages to understand intent and flag mismatches.
 - If previousOutputsParsed is present, use it as the authoritative previous-stage context.
 

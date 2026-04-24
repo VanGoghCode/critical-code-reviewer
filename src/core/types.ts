@@ -87,13 +87,13 @@ export interface ReviewFinding {
   recommendation?: string;
   suggestion?: string;
   /**
-   * A short, distinctive code snippet (1-2 words/identifiers) for quick matching.
-   * Used as a fallback when codeBlock is not provided.
+   * Legacy short identifier retained for backward compatibility in model output.
+   * Inline comment placement now requires an exact codeBlock match.
    */
   anchorSnippet?: string;
   /**
    * A larger code block (3-7 lines) that the AI is commenting on.
-   * This is the preferred way to locate the exact lines in the diff.
+   * This is the required way to locate inline comment lines in the diff.
    * The AI should copy the actual code from the diff, not make up code.
    */
   codeBlock?: string;

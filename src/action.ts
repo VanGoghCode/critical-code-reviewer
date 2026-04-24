@@ -268,7 +268,6 @@ async function main(): Promise<void> {
           files,
           maxComments: inlineCommentLimit,
           strategy: inlineCommentMode,
-          allowFallbackToFirstChangedLine: false,
         });
         inlineCommentsSkipped = inlineCommentResult.skippedCount;
 

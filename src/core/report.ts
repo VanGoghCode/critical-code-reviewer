@@ -36,6 +36,7 @@ const findingSchema = z.object({
   recommendation: z.string().optional(),
   suggestion: z.string().optional(),
   anchorSnippet: z.string().optional(),
+  codeBlock: z.string().optional(),
   hunkId: z.string().optional(),
   line: z.number().int().positive().optional(),
 });
