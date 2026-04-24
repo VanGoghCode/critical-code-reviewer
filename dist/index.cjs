@@ -29996,179 +29996,6 @@ function renderReviewMarkdown(params) {
   };
 }
 
-// src/core/patch-map.ts
-var HUNK_HEADER_PATTERN = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
-function toPositiveInt(raw, fallback) {
-  if (!raw) {
-    return fallback;
-  }
-  const parsed = Number.parseInt(raw, 10);
-  if (Number.isNaN(parsed) || parsed < 0) {
-    return fallback;
-  }
-  return parsed;
-}
-function normalizeSearchText(value) {
-  return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
-}
-function parseStructuredDiffHunks(patch) {
-  if (patch.trim().length === 0) {
-    return [];
-  }
-  const lines = patch.split(/\r?\n/);
-  const hunks = [];
-  let hunkCounter = 0;
-  for (let index = 0; index < lines.length; index += 1) {
-    const header = lines[index];
-    const match = header.match(HUNK_HEADER_PATTERN);
-    if (!match) {
-      continue;
-    }
-    hunkCounter += 1;
-    const hunk = {
-      id: `hunk_${hunkCounter}`,
-      oldStart: toPositiveInt(match[1], 0),
-      oldCount: toPositiveInt(match[2], 1),
-      newStart: toPositiveInt(match[3], 0),
-      newCount: toPositiveInt(match[4], 1),
-      header,
-      lines: []
-    };
-    let currentOldLine = hunk.oldStart;
-    let currentNewLine = hunk.newStart;
-    for (index += 1; index < lines.length; index += 1) {
-      const rawLine = lines[index];
-      if (rawLine.startsWith("@@ ")) {
-        index -= 1;
-        break;
-      }
-      if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
-        const text = rawLine.slice(1);
-        hunk.lines.push({
-          type: "add",
-          oldLine: null,
-          newLine: currentNewLine,
-          text
-        });
-        currentNewLine += 1;
-        continue;
-      }
-      if (rawLine.startsWith("-") && !rawLine.startsWith("---")) {
-        const text = rawLine.slice(1);
-        hunk.lines.push({
-          type: "del",
-          oldLine: currentOldLine,
-          newLine: null,
-          text
-        });
-        currentOldLine += 1;
-        continue;
-      }
-      if (rawLine.startsWith(" ")) {
-        const text = rawLine.slice(1);
-        hunk.lines.push({
-          type: "context",
-          oldLine: currentOldLine,
-          newLine: currentNewLine,
-          text
-        });
-        currentOldLine += 1;
-        currentNewLine += 1;
-      }
-    }
-    hunks.push(hunk);
-  }
-  return hunks;
-}
-function normalizeCodeLine(line) {
-  let normalized = line.trim();
-  if (normalized.startsWith("+") || normalized.startsWith("-") || normalized.startsWith(" ")) {
-    normalized = normalized.slice(1);
-  }
-  return normalizeSearchText(normalized);
-}
-function normalizeCodeBlockLine(line) {
-  const raw = line.replace(/\r$/, "");
-  if (raw.trim().length === 0) {
-    return void 0;
-  }
-  if (raw.startsWith("+")) {
-    return {
-      type: "add",
-      text: normalizeSearchText(raw.slice(1))
-    };
-  }
-  if (raw.startsWith("-")) {
-    return {
-      type: "del",
-      text: normalizeSearchText(raw.slice(1))
-    };
-  }
-  if (raw.startsWith(" ")) {
-    return {
-      type: "context",
-      text: normalizeSearchText(raw.slice(1))
-    };
-  }
-  return {
-    type: "unknown",
-    text: normalizeCodeLine(raw)
-  };
-}
-function extractCodeBlockLines(codeBlock) {
-  return codeBlock.split(/\r?\n/).map((line) => normalizeCodeBlockLine(line)).filter((line) => Boolean(line));
-}
-function resolveCodeBlockToLine(params) {
-  const { codeBlock, hunks, preferChangedLines = true } = params;
-  if (!codeBlock || codeBlock.trim().length === 0) {
-    return void 0;
-  }
-  const blockLines = extractCodeBlockLines(codeBlock);
-  if (blockLines.length === 0) {
-    return void 0;
-  }
-  const matches = [];
-  for (const hunk of hunks) {
-    const windowSize = blockLines.length;
-    for (let startIdx = 0; startIdx <= hunk.lines.length - windowSize; startIdx += 1) {
-      const windowLines = hunk.lines.slice(startIdx, startIdx + windowSize);
-      const isExactWindowMatch = blockLines.every((blockLine, index) => {
-        const diffLine = windowLines[index];
-        const normalizedDiffLine = normalizeSearchText(diffLine.text);
-        return blockLine.text === normalizedDiffLine && (blockLine.type === "unknown" || blockLine.type === diffLine.type);
-      });
-      if (!isExactWindowMatch) {
-        continue;
-      }
-      const preferredAnchor = windowLines.find(
-        (line) => line.type === "add" && line.newLine !== null
-      ) ?? windowLines.find((line) => line.newLine !== null);
-      if (!preferredAnchor?.newLine) {
-        continue;
-      }
-      matches.push({
-        anchorLine: preferredAnchor.newLine,
-        matchedLines: blockLines.length,
-        hasChangedLine: windowLines.some((line) => line.type === "add")
-      });
-    }
-  }
-  if (matches.length === 0) {
-    return void 0;
-  }
-  const preferredMatches = preferChangedLines ? matches.filter((match2) => match2.hasChangedLine) : matches;
-  const candidateMatches = preferredMatches.length > 0 ? preferredMatches : matches;
-  if (candidateMatches.length !== 1) {
-    return void 0;
-  }
-  const match = candidateMatches[0];
-  return {
-    line: match.anchorLine,
-    confidence: "exact",
-    matchedLines: match.matchedLines
-  };
-}
-
 // src/core/engine.ts
 var PARALLEL_STAGE_LAUNCH_GAP_MS = 1e3;
 var DEFAULT_INPUT_COST_PER_1M_USD = Number(
@@ -30217,39 +30044,22 @@ function buildRequestEnvelope(request, previousOutputs, stageIndex, stageCount, 
       (message) => truncateText(message, commitMessageBudget)
     )
   } : void 0;
-  const filesWithHunks = request.files.map((file) => {
-    const hunks = file.patch ? parseStructuredDiffHunks(file.patch) : [];
-    return {
-      path: file.path,
-      previousPath: file.previousPath,
-      name: file.name,
-      status: file.status,
-      language: file.language,
-      content: truncateText(file.content, fileBudget),
-      patch: file.patch ? truncateText(file.patch, fileBudget) : void 0,
-      hunks: hunks.map((hunk) => ({
-        id: hunk.id,
-        oldStart: hunk.oldStart,
-        oldCount: hunk.oldCount,
-        newStart: hunk.newStart,
-        newCount: hunk.newCount,
-        header: hunk.header,
-        lines: hunk.lines.map((line) => ({
-          type: line.type,
-          oldLine: line.oldLine,
-          newLine: line.newLine,
-          text: line.text
-        }))
-      }))
-    };
-  });
+  const files = request.files.map((file) => ({
+    path: file.path,
+    previousPath: file.previousPath,
+    name: file.name,
+    status: file.status,
+    language: file.language,
+    content: truncateText(file.content, fileBudget),
+    patch: file.patch ? truncateText(file.patch, fileBudget) : void 0
+  }));
   return JSON.stringify(
     {
       reviewContext,
       stageIndex,
       stageCount,
       architectureId: request.architectureId,
-      files: filesWithHunks,
+      files,
       previousOutputs: previousOutputs.map(
         (output) => truncateText(output, previousOutputBudget)
       ),
@@ -31090,6 +30900,179 @@ async function publishInlineReview(params) {
   };
 }
 
+// src/core/patch-map.ts
+var HUNK_HEADER_PATTERN = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+function toPositiveInt(raw, fallback) {
+  if (!raw) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    return fallback;
+  }
+  return parsed;
+}
+function normalizeSearchText(value) {
+  return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
+}
+function parseStructuredDiffHunks(patch) {
+  if (patch.trim().length === 0) {
+    return [];
+  }
+  const lines = patch.split(/\r?\n/);
+  const hunks = [];
+  let hunkCounter = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    const header = lines[index];
+    const match = header.match(HUNK_HEADER_PATTERN);
+    if (!match) {
+      continue;
+    }
+    hunkCounter += 1;
+    const hunk = {
+      id: `hunk_${hunkCounter}`,
+      oldStart: toPositiveInt(match[1], 0),
+      oldCount: toPositiveInt(match[2], 1),
+      newStart: toPositiveInt(match[3], 0),
+      newCount: toPositiveInt(match[4], 1),
+      header,
+      lines: []
+    };
+    let currentOldLine = hunk.oldStart;
+    let currentNewLine = hunk.newStart;
+    for (index += 1; index < lines.length; index += 1) {
+      const rawLine = lines[index];
+      if (rawLine.startsWith("@@ ")) {
+        index -= 1;
+        break;
+      }
+      if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
+        const text = rawLine.slice(1);
+        hunk.lines.push({
+          type: "add",
+          oldLine: null,
+          newLine: currentNewLine,
+          text
+        });
+        currentNewLine += 1;
+        continue;
+      }
+      if (rawLine.startsWith("-") && !rawLine.startsWith("---")) {
+        const text = rawLine.slice(1);
+        hunk.lines.push({
+          type: "del",
+          oldLine: currentOldLine,
+          newLine: null,
+          text
+        });
+        currentOldLine += 1;
+        continue;
+      }
+      if (rawLine.startsWith(" ")) {
+        const text = rawLine.slice(1);
+        hunk.lines.push({
+          type: "context",
+          oldLine: currentOldLine,
+          newLine: currentNewLine,
+          text
+        });
+        currentOldLine += 1;
+        currentNewLine += 1;
+      }
+    }
+    hunks.push(hunk);
+  }
+  return hunks;
+}
+function normalizeCodeLine(line) {
+  let normalized = line.trim();
+  if (normalized.startsWith("+") || normalized.startsWith("-") || normalized.startsWith(" ")) {
+    normalized = normalized.slice(1);
+  }
+  return normalizeSearchText(normalized);
+}
+function normalizeCodeBlockLine(line) {
+  const raw = line.replace(/\r$/, "");
+  if (raw.trim().length === 0) {
+    return void 0;
+  }
+  if (raw.startsWith("+")) {
+    return {
+      type: "add",
+      text: normalizeSearchText(raw.slice(1))
+    };
+  }
+  if (raw.startsWith("-")) {
+    return {
+      type: "del",
+      text: normalizeSearchText(raw.slice(1))
+    };
+  }
+  if (raw.startsWith(" ")) {
+    return {
+      type: "context",
+      text: normalizeSearchText(raw.slice(1))
+    };
+  }
+  return {
+    type: "unknown",
+    text: normalizeCodeLine(raw)
+  };
+}
+function extractCodeBlockLines(codeBlock) {
+  return codeBlock.split(/\r?\n/).map((line) => normalizeCodeBlockLine(line)).filter((line) => Boolean(line));
+}
+function resolveCodeBlockToLine(params) {
+  const { codeBlock, hunks, preferChangedLines = true } = params;
+  if (!codeBlock || codeBlock.trim().length === 0) {
+    return void 0;
+  }
+  const blockLines = extractCodeBlockLines(codeBlock);
+  if (blockLines.length === 0) {
+    return void 0;
+  }
+  const matches = [];
+  for (const hunk of hunks) {
+    const windowSize = blockLines.length;
+    for (let startIdx = 0; startIdx <= hunk.lines.length - windowSize; startIdx += 1) {
+      const windowLines = hunk.lines.slice(startIdx, startIdx + windowSize);
+      const isExactWindowMatch = blockLines.every((blockLine, index) => {
+        const diffLine = windowLines[index];
+        const normalizedDiffLine = normalizeSearchText(diffLine.text);
+        return blockLine.text === normalizedDiffLine && (blockLine.type === "unknown" || blockLine.type === diffLine.type);
+      });
+      if (!isExactWindowMatch) {
+        continue;
+      }
+      const preferredAnchor = windowLines.find(
+        (line) => line.type === "add" && line.newLine !== null
+      ) ?? windowLines.find((line) => line.newLine !== null);
+      if (!preferredAnchor?.newLine) {
+        continue;
+      }
+      matches.push({
+        anchorLine: preferredAnchor.newLine,
+        matchedLines: blockLines.length,
+        hasChangedLine: windowLines.some((line) => line.type === "add")
+      });
+    }
+  }
+  if (matches.length === 0) {
+    return void 0;
+  }
+  const preferredMatches = preferChangedLines ? matches.filter((match2) => match2.hasChangedLine) : matches;
+  const candidateMatches = preferredMatches.length > 0 ? preferredMatches : matches;
+  if (candidateMatches.length !== 1) {
+    return void 0;
+  }
+  const match = candidateMatches[0];
+  return {
+    line: match.anchorLine,
+    confidence: "exact",
+    matchedLines: match.matchedLines
+  };
+}
+
 // src/core/inline-comments.ts
 var SEVERITY_PRIORITY = {
   high: 3,
@@ -31352,6 +31335,14 @@ function waitForDelay2(milliseconds) {
     setTimeout(resolve, milliseconds);
   });
 }
+function isPersistentRateLimitBody(rawBody) {
+  return /rate limit/i.test(rawBody) || /project has exceeded/i.test(rawBody);
+}
+function createRequestError(message, retryable) {
+  const error2 = new Error(message);
+  error2.retryable = retryable;
+  return error2;
+}
 async function requestAsuAimlChatCompletion(config, messages) {
   const { systemPrompt, query } = convertMessagesToAsuFormat(messages);
   const body = {
@@ -31383,14 +31374,16 @@ async function requestAsuAimlChatCompletion(config, messages) {
       });
       const rawBody = await response.text();
       if (!response.ok) {
-        if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < MAX_RETRY_ATTEMPTS - 1) {
+        const requestError = createRequestError(
+          `ASU AIML request failed with status ${response.status}: ${rawBody}`,
+          !isPersistentRateLimitBody(rawBody)
+        );
+        if (RETRYABLE_STATUS_CODES.has(response.status) && requestError.retryable !== false && attempt < MAX_RETRY_ATTEMPTS - 1) {
           const delayMs = getRetryDelayMs(attempt, response);
           await waitForDelay2(delayMs);
           continue;
         }
-        throw new Error(
-          `ASU AIML request failed with status ${response.status}: ${rawBody}`
-        );
+        throw requestError;
       }
       return parseAsuAimlResponse(rawBody);
     } catch (error2) {
@@ -31399,6 +31392,9 @@ async function requestAsuAimlChatCompletion(config, messages) {
         throw new Error(
           `ASU AIML request timed out after ${config.timeoutMs}ms.`
         );
+      }
+      if (error2 instanceof Error && error2.retryable === false) {
+        throw error2;
       }
       lastError = error2 instanceof Error ? error2 : new Error(String(error2));
       if (attempt < MAX_RETRY_ATTEMPTS - 1) {
@@ -31644,7 +31640,11 @@ async function main() {
     );
     const githubToken = readOptionalInput("github-token") ?? process.env.GITHUB_TOKEN;
     const maxFiles = readIntegerInput("max-files", 25);
-    const maxContextChars = readIntegerInput("max-context-chars", 12e3);
+    const MAX_CONTEXT_CHARS_CAP = 2e5;
+    const rawMaxContextChars = readIntegerInput("max-context-chars", 12e3);
+    const maxContextChars = rawMaxContextChars > MAX_CONTEXT_CHARS_CAP ? (core.warning(
+      `max-context-chars (${rawMaxContextChars}) exceeds safe limit of ${MAX_CONTEXT_CHARS_CAP}. Capping to ${MAX_CONTEXT_CHARS_CAP} to avoid rate-limit failures.`
+    ), MAX_CONTEXT_CHARS_CAP) : rawMaxContextChars;
     const repoRoot = process.cwd();
     const logger = createLogger((entry) => {
       const details = entry.details ? ` ${JSON.stringify(entry.details)}` : "";

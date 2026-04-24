@@ -164,7 +164,15 @@ async function main(): Promise<void> {
     const githubToken =
       readOptionalInput("github-token") ?? process.env.GITHUB_TOKEN;
     const maxFiles = readIntegerInput("max-files", 25);
-    const maxContextChars = readIntegerInput("max-context-chars", 12000);
+    const MAX_CONTEXT_CHARS_CAP = 200_000;
+    const rawMaxContextChars = readIntegerInput("max-context-chars", 12000);
+    const maxContextChars =
+      rawMaxContextChars > MAX_CONTEXT_CHARS_CAP
+        ? (core.warning(
+            `max-context-chars (${rawMaxContextChars}) exceeds safe limit of ${MAX_CONTEXT_CHARS_CAP}. Capping to ${MAX_CONTEXT_CHARS_CAP} to avoid rate-limit failures.`,
+          ),
+          MAX_CONTEXT_CHARS_CAP)
+        : rawMaxContextChars;
     const repoRoot = process.cwd();
 
     const logger = createLogger((entry) => {
