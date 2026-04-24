@@ -1,6 +1,5 @@
 import { readPromptText } from "./prompt-loader.js";
 import { parseReviewModelOutput, renderReviewMarkdown } from "./report.js";
-import { parseStructuredDiffHunks } from "./patch-map.js";
 import type {
   LoadedPromptArchitecture,
   ReviewLogger,
@@ -77,34 +76,15 @@ function buildRequestEnvelope(
       }
     : undefined;
 
-  // Parse hunks for each file to provide structured diff data
-  const filesWithHunks = request.files.map((file) => {
-    const hunks = file.patch ? parseStructuredDiffHunks(file.patch) : [];
-    
-    return {
-      path: file.path,
-      previousPath: file.previousPath,
-      name: file.name,
-      status: file.status,
-      language: file.language,
-      content: truncateText(file.content, fileBudget),
-      patch: file.patch ? truncateText(file.patch, fileBudget) : undefined,
-      hunks: hunks.map((hunk) => ({
-        id: hunk.id,
-        oldStart: hunk.oldStart,
-        oldCount: hunk.oldCount,
-        newStart: hunk.newStart,
-        newCount: hunk.newCount,
-        header: hunk.header,
-        lines: hunk.lines.map((line) => ({
-          type: line.type,
-          oldLine: line.oldLine,
-          newLine: line.newLine,
-          text: line.text,
-        })),
-      })),
-    };
-  });
+  const files = request.files.map((file) => ({
+    path: file.path,
+    previousPath: file.previousPath,
+    name: file.name,
+    status: file.status,
+    language: file.language,
+    content: truncateText(file.content, fileBudget),
+    patch: file.patch ? truncateText(file.patch, fileBudget) : undefined,
+  }));
 
   return JSON.stringify(
     {
@@ -112,7 +92,7 @@ function buildRequestEnvelope(
       stageIndex,
       stageCount,
       architectureId: request.architectureId,
-      files: filesWithHunks,
+      files,
       previousOutputs: previousOutputs.map((output) =>
         truncateText(output, previousOutputBudget),
       ),

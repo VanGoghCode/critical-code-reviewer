@@ -106,6 +106,20 @@ function waitForDelay(milliseconds: number): Promise<void> {
   });
 }
 
+type RequestError = Error & {
+  retryable?: boolean;
+};
+
+function isPersistentRateLimitBody(rawBody: string): boolean {
+  return /rate limit/i.test(rawBody) || /project has exceeded/i.test(rawBody);
+}
+
+function createRequestError(message: string, retryable: boolean): RequestError {
+  const error = new Error(message) as RequestError;
+  error.retryable = retryable;
+  return error;
+}
+
 export async function requestAsuAimlChatCompletion(
   config: AsuAimlProviderConfig,
   messages: ReviewProviderMessage[],
@@ -147,8 +161,14 @@ export async function requestAsuAimlChatCompletion(
       const rawBody = await response.text();
 
       if (!response.ok) {
+        const requestError = createRequestError(
+          `ASU AIML request failed with status ${response.status}: ${rawBody}`,
+          !isPersistentRateLimitBody(rawBody),
+        );
+
         if (
           RETRYABLE_STATUS_CODES.has(response.status) &&
+          requestError.retryable !== false &&
           attempt < MAX_RETRY_ATTEMPTS - 1
         ) {
           const delayMs = getRetryDelayMs(attempt, response);
@@ -156,9 +176,7 @@ export async function requestAsuAimlChatCompletion(
           continue;
         }
 
-        throw new Error(
-          `ASU AIML request failed with status ${response.status}: ${rawBody}`,
-        );
+        throw requestError;
       }
 
       return parseAsuAimlResponse(rawBody);
@@ -169,6 +187,10 @@ export async function requestAsuAimlChatCompletion(
         throw new Error(
           `ASU AIML request timed out after ${config.timeoutMs}ms.`,
         );
+      }
+
+      if (error instanceof Error && (error as RequestError).retryable === false) {
+        throw error;
       }
 
       lastError = error instanceof Error ? error : new Error(String(error));

@@ -289,4 +289,63 @@ describe("review engine", () => {
       (previousOutputsParsed as Array<{ summary?: string }>)[0]?.summary,
     ).toBe("Output for stage-1");
   });
+
+  it("keeps the review envelope patch-only for diff files", async () => {
+    const architecture = await loadArchitectureById("prompts", "single-pass");
+    const logger = createLogger(() => {
+      return;
+    });
+
+    let capturedEnvelope: Record<string, unknown> | undefined;
+
+    const provider: ReviewProvider = {
+      async review(input: ReviewProviderRequest): Promise<string> {
+        const userMessage = input.messages.find(
+          (message) => message.role === "user",
+        );
+
+        if (userMessage?.content) {
+          const content = userMessage.content as string;
+          const jsonEnd = content.indexOf("\n\n<!--");
+          const jsonText = jsonEnd >= 0 ? content.slice(0, jsonEnd) : content;
+          capturedEnvelope = JSON.parse(jsonText) as Record<string, unknown>;
+        }
+
+        return JSON.stringify({
+          summary: "Output for single-pass",
+          riskLevel: "low",
+          findings: [],
+          todos: [],
+          notes: [],
+        });
+      },
+    };
+
+    await runReviewArchitecture({
+      architecture,
+      request: {
+        architectureId: architecture.id,
+        files: [
+          {
+            path: "src/example.ts",
+            name: "example.ts",
+            content: "export const value = 1;\n",
+            patch: "@@ -1 +1 @@\n-const value = 0;\n+const value = 1;\n",
+          },
+        ],
+      },
+      provider,
+      logger,
+      maxContextChars: 8000,
+    });
+
+    const files = capturedEnvelope?.files as
+      | Array<Record<string, unknown>>
+      | undefined;
+
+    expect(Array.isArray(files)).toBe(true);
+    expect(files?.[0]).toBeTruthy();
+    expect(files?.[0]).toHaveProperty("patch");
+    expect(files?.[0]).not.toHaveProperty("hunks");
+  });
 });
