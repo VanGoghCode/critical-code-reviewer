@@ -1,16 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const paginateMock = vi.fn();
-const createReviewMock = vi.fn();
-const getOctokitMock = vi.fn(() => ({
-  paginate: paginateMock,
-  rest: {
-    pulls: {
-      listReviewComments: vi.fn(),
-      createReview: createReviewMock,
+const { paginateMock, createReviewMock, getOctokitMock } = vi.hoisted(() => {
+  const paginateMock = vi.fn();
+  const createReviewMock = vi.fn();
+  const getOctokitMock = vi.fn(() => ({
+    paginate: paginateMock,
+    rest: {
+      pulls: {
+        listReviewComments: vi.fn(),
+        createReview: createReviewMock,
+      },
     },
-  },
-}));
+  }));
+
+  return {
+    paginateMock,
+    createReviewMock,
+    getOctokitMock,
+  };
+});
 
 vi.mock("@actions/github", () => ({
   getOctokit: getOctokitMock,
