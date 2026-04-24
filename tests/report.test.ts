@@ -116,5 +116,7 @@ describe("buildReviewConversationBody", () => {
 
     expect(inlineComments.comments).toHaveLength(1);
     expect(inlineComments.comments[0]?.line).toBe(50);
+    expect(inlineComments.comments[0]?.startLine).toBe(48);
+    expect(inlineComments.comments[0]?.endLine).toBe(52);
   });
 });

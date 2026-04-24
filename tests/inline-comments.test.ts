@@ -39,6 +39,8 @@ describe("buildInlineReviewComments", () => {
 
     expect(result.comments).toHaveLength(1);
     expect(result.comments[0].line).toBe(2);
+    expect(result.comments[0].startLine).toBe(1);
+    expect(result.comments[0].endLine).toBe(4);
     expect(result.comments[0].path).toBe("src/app/alerts.ts");
   });
 
@@ -151,6 +153,8 @@ describe("buildInlineReviewComments", () => {
     expect(result.comments[0].body).toContain(
       "**Protected Attribute Governance**",
     );
+    expect(result.comments[0].startLine).toBe(1);
+    expect(result.comments[0].endLine).toBe(4);
   });
 
   it("resolves comments using codeBlock", () => {
@@ -190,7 +194,9 @@ describe("buildInlineReviewComments", () => {
 
     expect(result.comments).toHaveLength(1);
     expect(result.comments[0].line).toBe(2);
-    expect(result.comments[0].body).toContain("Comment on line 2");
+    expect(result.comments[0].body).toContain("Comment on lines 2-3");
+    expect(result.comments[0].startLine).toBe(1);
+    expect(result.comments[0].endLine).toBe(4);
   });
 
   it("anchors using the first line of the matched code block", () => {
@@ -230,5 +236,7 @@ describe("buildInlineReviewComments", () => {
 
     expect(result.comments).toHaveLength(1);
     expect(result.comments[0].line).toBe(2);
+    expect(result.comments[0].startLine).toBe(1);
+    expect(result.comments[0].endLine).toBe(4);
   });
 });

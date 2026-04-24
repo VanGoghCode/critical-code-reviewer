@@ -15,6 +15,8 @@ const SEVERITY_PRIORITY: Record<ReviewSeverity, number> = {
   low: 1,
 };
 
+const DEFAULT_CONTEXT_PADDING_LINES = 5;
+
 const SKIP_REASON_KEYS = [
   "missing-file",
   "unmatched-file",
@@ -29,6 +31,8 @@ export type InlineCommentSkipReason = (typeof SKIP_REASON_KEYS)[number];
 export interface InlineReviewComment {
   path: string;
   line: number;
+  startLine?: number;
+  endLine?: number;
   body: string;
   severity: ReviewSeverity;
   title: string;
@@ -38,6 +42,7 @@ export interface InlineCommentBuildOptions {
   findings: ReviewFinding[];
   files: ReviewFileInput[];
   maxComments: number;
+  contextPaddingLines?: number;
   strategy?: InlineCommentStrategy;
 }
 
@@ -52,6 +57,8 @@ export type InlineCommentStrategy = "findings" | "file-coverage";
 interface InlineCommentCandidate {
   path: string;
   line: number;
+  startLine?: number;
+  endLine?: number;
   body: string;
   severity: ReviewSeverity;
   title: string;
@@ -80,7 +87,8 @@ function normalizePath(pathValue: string): string {
 
 function formatInlineCommentBody(
   finding: ReviewFinding,
-  line?: number,
+  startLine?: number,
+  endLine?: number,
 ): string {
   // Keep inline comments in a predictable structure:
   // 1) line notation, 2) criterion name, 3) issue + impact detail, 4) small suggestion.
@@ -89,8 +97,14 @@ function formatInlineCommentBody(
   const parts: string[] = [];
 
   // Add line notation if we have line information
-  if (typeof line === "number") {
-    parts.push(`_Comment on line ${line}_\n`);
+  if (typeof startLine === "number") {
+    const renderedEndLine =
+      typeof endLine === "number" ? Math.max(startLine, endLine) : startLine;
+    if (renderedEndLine > startLine) {
+      parts.push(`_Comment on lines ${startLine}-${renderedEndLine}_\n`);
+    } else {
+      parts.push(`_Comment on line ${startLine}_\n`);
+    }
   }
 
   parts.push(`**${finding.title.trim()}**\n`);
@@ -150,8 +164,9 @@ function resolveInlineCommentCandidate(params: {
   finding: ReviewFinding;
   files: ReviewFileInput[];
   hunkCache: Map<string, StructuredDiffHunk[]>;
+  contextPaddingLines: number;
 }): CandidateResolution {
-  const { finding, files, hunkCache } = params;
+  const { finding, files, hunkCache, contextPaddingLines } = params;
 
   if (!finding.file || finding.file.trim().length === 0) {
     return { reason: "missing-file" };
@@ -182,21 +197,36 @@ function resolveInlineCommentCandidate(params: {
     codeBlock: finding.codeBlock,
     hunks,
     preferChangedLines: true,
+    surroundingContextLines: contextPaddingLines,
   });
 
   if (!codeBlockResult) {
     return { reason: "unresolved-line" };
   }
 
-  const dedupeKey = `${fileRecord.path}:${codeBlockResult.line}:${finding.title
-    .trim()
-    .toLowerCase()}`;
+  const rangeStartLine =
+    codeBlockResult.contextStartLine < codeBlockResult.contextEndLine
+      ? codeBlockResult.contextStartLine
+      : undefined;
+  const rangeEndLine =
+    codeBlockResult.contextStartLine < codeBlockResult.contextEndLine
+      ? codeBlockResult.contextEndLine
+      : undefined;
+  const dedupeKey = `${fileRecord.path}:${rangeStartLine ?? codeBlockResult.line}:${
+    rangeEndLine ?? codeBlockResult.line
+  }:${finding.title.trim().toLowerCase()}`;
 
   return {
     candidate: {
       path: fileRecord.path,
       line: codeBlockResult.line,
-      body: formatInlineCommentBody(finding, codeBlockResult.line),
+      startLine: rangeStartLine,
+      endLine: rangeEndLine,
+      body: formatInlineCommentBody(
+        finding,
+        codeBlockResult.line,
+        codeBlockResult.endLine,
+      ),
       severity: finding.severity,
       title: finding.title,
       dedupeKey,
@@ -210,6 +240,10 @@ export function buildInlineReviewComments(
   const maxComments = Math.max(0, Math.floor(options.maxComments));
   const strategy = options.strategy ?? "findings";
   const skippedByReason = createSkipCounter();
+  const contextPaddingLines = Math.max(
+    0,
+    Math.floor(options.contextPaddingLines ?? DEFAULT_CONTEXT_PADDING_LINES),
+  );
 
   if (maxComments === 0 || options.findings.length === 0) {
     return {
@@ -229,6 +263,7 @@ export function buildInlineReviewComments(
       finding,
       files: options.files,
       hunkCache,
+      contextPaddingLines,
     });
 
     if (resolution.reason) {
@@ -251,6 +286,8 @@ export function buildInlineReviewComments(
     comments.push({
       path: candidate.path,
       line: candidate.line,
+      startLine: candidate.startLine,
+      endLine: candidate.endLine,
       body: candidate.body,
       severity: candidate.severity,
       title: candidate.title,

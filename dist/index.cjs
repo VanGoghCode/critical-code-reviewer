@@ -30835,9 +30835,12 @@ function normalizeCommentBody(body) {
 }
 function toCommentDedupeKey(comment) {
   const normalizedLine = Math.round(comment.line);
+  const normalizedStartLine = typeof comment.startLine === "number" ? Math.round(comment.startLine) : normalizedLine;
+  const normalizedEndLine = typeof comment.endLine === "number" ? Math.round(comment.endLine) : normalizedLine;
   return [
     normalizePath(comment.path),
-    String(normalizedLine),
+    String(normalizedStartLine),
+    String(normalizedEndLine),
     normalizeCommentBody(comment.body)
   ].join(":");
 }
@@ -30868,6 +30871,8 @@ async function publishInlineReview(params) {
       toCommentDedupeKey({
         path: comment.path,
         line: comment.line,
+        startLine: typeof comment.start_line === "number" ? comment.start_line : void 0,
+        endLine: comment.line,
         body: comment.body
       })
     );
@@ -30886,12 +30891,20 @@ async function publishInlineReview(params) {
     pull_number: params.pullNumber,
     event: "COMMENT",
     body: params.reviewBody,
-    comments: commentsToPost.map((comment) => ({
-      path: comment.path,
-      line: comment.line,
-      side: "RIGHT",
-      body: comment.body
-    })),
+    comments: commentsToPost.map((comment) => {
+      const effectiveEndLine = comment.endLine ?? comment.line;
+      const hasRange = typeof comment.startLine === "number" && comment.startLine < effectiveEndLine;
+      return {
+        path: comment.path,
+        line: effectiveEndLine,
+        side: "RIGHT",
+        ...hasRange ? {
+          start_line: comment.startLine,
+          start_side: "RIGHT"
+        } : {},
+        body: comment.body
+      };
+    }),
     commit_id: params.commitId
   });
   return {
@@ -31023,7 +31036,12 @@ function extractCodeBlockLines(codeBlock) {
   return codeBlock.split(/\r?\n/).map((line) => normalizeCodeBlockLine(line)).filter((line) => Boolean(line));
 }
 function resolveCodeBlockToLine(params) {
-  const { codeBlock, hunks, preferChangedLines = true } = params;
+  const {
+    codeBlock,
+    hunks,
+    preferChangedLines = true,
+    surroundingContextLines = 0
+  } = params;
   if (!codeBlock || codeBlock.trim().length === 0) {
     return void 0;
   }
@@ -31044,14 +31062,33 @@ function resolveCodeBlockToLine(params) {
       if (!isExactWindowMatch) {
         continue;
       }
-      const preferredAnchor = windowLines.find(
-        (line) => line.type === "add" && line.newLine !== null
-      ) ?? windowLines.find((line) => line.newLine !== null);
-      if (!preferredAnchor?.newLine) {
+      const visibleWindowLines = windowLines.filter(
+        (line) => line.newLine !== null
+      );
+      if (visibleWindowLines.length === 0) {
+        continue;
+      }
+      const exactStartLine = visibleWindowLines[0]?.newLine;
+      const exactEndLine = visibleWindowLines.at(-1)?.newLine;
+      if (typeof exactStartLine !== "number" || typeof exactEndLine !== "number") {
+        continue;
+      }
+      const contextStartIdx = Math.max(0, startIdx - surroundingContextLines);
+      const contextEndIdx = Math.min(
+        hunk.lines.length - 1,
+        startIdx + windowSize - 1 + surroundingContextLines
+      );
+      const visibleContextLines = hunk.lines.slice(contextStartIdx, contextEndIdx + 1).filter((line) => line.newLine !== null);
+      const contextStartLine = visibleContextLines[0]?.newLine;
+      const contextEndLine = visibleContextLines.at(-1)?.newLine;
+      if (typeof contextStartLine !== "number" || typeof contextEndLine !== "number") {
         continue;
       }
       matches.push({
-        anchorLine: preferredAnchor.newLine,
+        anchorLine: exactStartLine,
+        endLine: exactEndLine,
+        contextStartLine,
+        contextEndLine,
         matchedLines: blockLines.length,
         hasChangedLine: windowLines.some((line) => line.type === "add")
       });
@@ -31068,6 +31105,9 @@ function resolveCodeBlockToLine(params) {
   const match = candidateMatches[0];
   return {
     line: match.anchorLine,
+    endLine: match.endLine,
+    contextStartLine: match.contextStartLine,
+    contextEndLine: match.contextEndLine,
     confidence: "exact",
     matchedLines: match.matchedLines
   };
@@ -31079,6 +31119,7 @@ var SEVERITY_PRIORITY = {
   medium: 2,
   low: 1
 };
+var DEFAULT_CONTEXT_PADDING_LINES = 5;
 function createSkipCounter() {
   return {
     "missing-file": 0,
@@ -31092,12 +31133,18 @@ function createSkipCounter() {
 function normalizePath2(pathValue) {
   return pathValue.replaceAll("\\", "/").trim().toLowerCase();
 }
-function formatInlineCommentBody(finding, line) {
+function formatInlineCommentBody(finding, startLine, endLine) {
   const recommendation = finding.recommendation ?? finding.suggestion;
   const parts = [];
-  if (typeof line === "number") {
-    parts.push(`_Comment on line ${line}_
+  if (typeof startLine === "number") {
+    const renderedEndLine = typeof endLine === "number" ? Math.max(startLine, endLine) : startLine;
+    if (renderedEndLine > startLine) {
+      parts.push(`_Comment on lines ${startLine}-${renderedEndLine}_
 `);
+    } else {
+      parts.push(`_Comment on line ${startLine}_
+`);
+    }
   }
   parts.push(`**${finding.title.trim()}**
 `);
@@ -31137,7 +31184,7 @@ function resolveFileRecord(findingFile, files) {
   )[0];
 }
 function resolveInlineCommentCandidate(params) {
-  const { finding, files, hunkCache } = params;
+  const { finding, files, hunkCache, contextPaddingLines } = params;
   if (!finding.file || finding.file.trim().length === 0) {
     return { reason: "missing-file" };
   }
@@ -31157,17 +31204,26 @@ function resolveInlineCommentCandidate(params) {
   const codeBlockResult = resolveCodeBlockToLine({
     codeBlock: finding.codeBlock,
     hunks,
-    preferChangedLines: true
+    preferChangedLines: true,
+    surroundingContextLines: contextPaddingLines
   });
   if (!codeBlockResult) {
     return { reason: "unresolved-line" };
   }
-  const dedupeKey = `${fileRecord.path}:${codeBlockResult.line}:${finding.title.trim().toLowerCase()}`;
+  const rangeStartLine = codeBlockResult.contextStartLine < codeBlockResult.contextEndLine ? codeBlockResult.contextStartLine : void 0;
+  const rangeEndLine = codeBlockResult.contextStartLine < codeBlockResult.contextEndLine ? codeBlockResult.contextEndLine : void 0;
+  const dedupeKey = `${fileRecord.path}:${rangeStartLine ?? codeBlockResult.line}:${rangeEndLine ?? codeBlockResult.line}:${finding.title.trim().toLowerCase()}`;
   return {
     candidate: {
       path: fileRecord.path,
       line: codeBlockResult.line,
-      body: formatInlineCommentBody(finding, codeBlockResult.line),
+      startLine: rangeStartLine,
+      endLine: rangeEndLine,
+      body: formatInlineCommentBody(
+        finding,
+        codeBlockResult.line,
+        codeBlockResult.endLine
+      ),
       severity: finding.severity,
       title: finding.title,
       dedupeKey
@@ -31178,6 +31234,10 @@ function buildInlineReviewComments(options) {
   const maxComments = Math.max(0, Math.floor(options.maxComments));
   const strategy = options.strategy ?? "findings";
   const skippedByReason = createSkipCounter();
+  const contextPaddingLines = Math.max(
+    0,
+    Math.floor(options.contextPaddingLines ?? DEFAULT_CONTEXT_PADDING_LINES)
+  );
   if (maxComments === 0 || options.findings.length === 0) {
     return {
       comments: [],
@@ -31193,7 +31253,8 @@ function buildInlineReviewComments(options) {
     const resolution = resolveInlineCommentCandidate({
       finding,
       files: options.files,
-      hunkCache
+      hunkCache,
+      contextPaddingLines
     });
     if (resolution.reason) {
       skippedByReason[resolution.reason] += 1;
@@ -31212,6 +31273,8 @@ function buildInlineReviewComments(options) {
     comments.push({
       path: candidate.path,
       line: candidate.line,
+      startLine: candidate.startLine,
+      endLine: candidate.endLine,
       body: candidate.body,
       severity: candidate.severity,
       title: candidate.title

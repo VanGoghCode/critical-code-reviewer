@@ -92,9 +92,10 @@ export interface ReviewFinding {
    */
   anchorSnippet?: string;
   /**
-   * A larger code block (3-7 lines) that the AI is commenting on.
+   * A larger code block (3-12 lines) that the AI is commenting on.
    * This is the required way to locate inline comment lines in the diff.
    * The AI should copy the actual code from the diff, not make up code.
+   * Include every identifier explicitly named in the finding detail.
    */
   codeBlock?: string;
   hunkId?: string;

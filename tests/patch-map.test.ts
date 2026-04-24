@@ -214,9 +214,13 @@ describe("resolveAnchorToGitHubLocation", () => {
       codeBlock,
       hunks,
       preferChangedLines: true,
+      surroundingContextLines: 5,
     });
 
     expect(result?.line).toBe(2);
+    expect(result?.endLine).toBe(3);
+    expect(result?.contextStartLine).toBe(1);
+    expect(result?.contextEndLine).toBe(4);
     expect(result?.confidence).toBe("exact");
   });
 

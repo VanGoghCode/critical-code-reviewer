@@ -635,6 +635,9 @@ function extractCodeBlockLines(codeBlock: string): NormalizedCodeBlockLine[] {
 
 export interface CodeBlockMatchResult {
   line: number;
+  endLine: number;
+  contextStartLine: number;
+  contextEndLine: number;
   confidence: "exact";
   matchedLines: number;
 }
@@ -656,8 +659,14 @@ export function resolveCodeBlockToLine(params: {
   codeBlock: string;
   hunks: StructuredDiffHunk[];
   preferChangedLines?: boolean;
+  surroundingContextLines?: number;
 }): CodeBlockMatchResult | undefined {
-  const { codeBlock, hunks, preferChangedLines = true } = params;
+  const {
+    codeBlock,
+    hunks,
+    preferChangedLines = true,
+    surroundingContextLines = 0,
+  } = params;
 
   if (!codeBlock || codeBlock.trim().length === 0) {
     return undefined;
@@ -670,6 +679,9 @@ export function resolveCodeBlockToLine(params: {
 
   const matches: Array<{
     anchorLine: number;
+    endLine: number;
+    contextStartLine: number;
+    contextEndLine: number;
     matchedLines: number;
     hasChangedLine: boolean;
   }> = [];
@@ -695,17 +707,47 @@ export function resolveCodeBlockToLine(params: {
         continue;
       }
 
-      const preferredAnchor =
-        windowLines.find(
-          (line) => line.type === "add" && line.newLine !== null,
-        ) ?? windowLines.find((line) => line.newLine !== null);
+      const visibleWindowLines = windowLines.filter(
+        (line) => line.newLine !== null,
+      );
+      if (visibleWindowLines.length === 0) {
+        continue;
+      }
 
-      if (!preferredAnchor?.newLine) {
+      const exactStartLine = visibleWindowLines[0]?.newLine;
+      const exactEndLine = visibleWindowLines.at(-1)?.newLine;
+
+      if (
+        typeof exactStartLine !== "number" ||
+        typeof exactEndLine !== "number"
+      ) {
+        continue;
+      }
+
+      const contextStartIdx = Math.max(0, startIdx - surroundingContextLines);
+      const contextEndIdx = Math.min(
+        hunk.lines.length - 1,
+        startIdx + windowSize - 1 + surroundingContextLines,
+      );
+      const visibleContextLines = hunk.lines
+        .slice(contextStartIdx, contextEndIdx + 1)
+        .filter((line) => line.newLine !== null);
+
+      const contextStartLine = visibleContextLines[0]?.newLine;
+      const contextEndLine = visibleContextLines.at(-1)?.newLine;
+
+      if (
+        typeof contextStartLine !== "number" ||
+        typeof contextEndLine !== "number"
+      ) {
         continue;
       }
 
       matches.push({
-        anchorLine: preferredAnchor.newLine,
+        anchorLine: exactStartLine,
+        endLine: exactEndLine,
+        contextStartLine,
+        contextEndLine,
         matchedLines: blockLines.length,
         hasChangedLine: windowLines.some((line) => line.type === "add"),
       });
@@ -730,6 +772,9 @@ export function resolveCodeBlockToLine(params: {
 
   return {
     line: match.anchorLine,
+    endLine: match.endLine,
+    contextStartLine: match.contextStartLine,
+    contextEndLine: match.contextEndLine,
     confidence: "exact",
     matchedLines: match.matchedLines,
   };

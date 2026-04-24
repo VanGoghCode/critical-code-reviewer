@@ -12,13 +12,24 @@ function normalizeCommentBody(body: string): string {
 function toCommentDedupeKey(comment: {
   path: string;
   line: number;
+  startLine?: number;
+  endLine?: number;
   body: string;
 }): string {
   const normalizedLine = Math.round(comment.line);
+  const normalizedStartLine =
+    typeof comment.startLine === "number"
+      ? Math.round(comment.startLine)
+      : normalizedLine;
+  const normalizedEndLine =
+    typeof comment.endLine === "number"
+      ? Math.round(comment.endLine)
+      : normalizedLine;
 
   return [
     normalizePath(comment.path),
-    String(normalizedLine),
+    String(normalizedStartLine),
+    String(normalizedEndLine),
     normalizeCommentBody(comment.body),
   ].join(":");
 }
@@ -73,6 +84,9 @@ export async function publishInlineReview(
       toCommentDedupeKey({
         path: comment.path,
         line: comment.line,
+        startLine:
+          typeof comment.start_line === "number" ? comment.start_line : undefined,
+        endLine: comment.line,
         body: comment.body,
       }),
     );
@@ -94,12 +108,25 @@ export async function publishInlineReview(
     pull_number: params.pullNumber,
     event: "COMMENT",
     body: params.reviewBody,
-    comments: commentsToPost.map((comment) => ({
-      path: comment.path,
-      line: comment.line,
-      side: "RIGHT" as const,
-      body: comment.body,
-    })),
+    comments: commentsToPost.map((comment) => {
+      const effectiveEndLine = comment.endLine ?? comment.line;
+      const hasRange =
+        typeof comment.startLine === "number" &&
+        comment.startLine < effectiveEndLine;
+
+      return {
+        path: comment.path,
+        line: effectiveEndLine,
+        side: "RIGHT" as const,
+        ...(hasRange
+          ? {
+              start_line: comment.startLine,
+              start_side: "RIGHT" as const,
+            }
+          : {}),
+        body: comment.body,
+      };
+    }),
     commit_id: params.commitId,
   });
 
